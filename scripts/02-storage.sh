@@ -21,6 +21,11 @@ LABEL=bulk
 UID_N="$(id -u)"; GID_N="$(id -g)"
 
 if [[ -n "$DISK" ]]; then
+  # sgdisk lives in gdisk, partprobe in parted. Neither is on a minimal Debian.
+  for pkg in gdisk parted; do
+    dpkg -s "$pkg" >/dev/null 2>&1 || { echo "==> installing $pkg"; sudo apt-get -y install "$pkg"; }
+  done
+
   echo "!! about to ERASE $DISK:"
   lsblk -o NAME,SIZE,MODEL,SERIAL,TRAN,MOUNTPOINT "$DISK"
   read -rp "type the disk path again to confirm: " confirm
