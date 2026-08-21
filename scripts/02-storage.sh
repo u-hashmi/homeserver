@@ -88,7 +88,15 @@ sudo mkdir -p \
   /srv/apps/edge/{caddy-data,caddy-config} \
   /srv/apps/kalshi
 
-sudo chown -R "$UID_N:$GID_N" /srv/apps
+# /srv/apps holds per-container state, and the containers do NOT share a uid:
+#   cloud/html  -> www-data (33)      cloud/db -> postgres (70)
+#   edge, vpn, ops -> managed as root by their own images
+#   media/*, download/*, kalshi -> PUID (1000)
+# A blanket `chown -R /srv/apps` therefore BREAKS Nextcloud ("Cannot write into
+# config directory") and can break Postgres. Chown only the PUID-owned trees, and
+# let every other image manage its own.
+sudo chown "$UID_N:$GID_N" /srv/apps
+sudo chown -R "$UID_N:$GID_N"   /srv/apps/media /srv/apps/download /srv/apps/kalshi 2>/dev/null || true
 if [[ $NO_BULK -eq 0 ]]; then
   sudo chown -R "$UID_N:$GID_N" "$MNT"/media
   sudo chmod -R 775 "$MNT"/media
