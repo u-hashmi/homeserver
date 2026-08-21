@@ -18,6 +18,24 @@ STACKS=("$@")
 docker network inspect edge >/dev/null 2>&1 || {
   echo "!! the 'edge' network is missing — run scripts/03-docker.sh first"; exit 1; }
 
+# Refuse to start anything that bind-mounts /mnt/bulk when the drive is not actually
+# mounted. Without this check docker silently creates the bind-mount source on the
+# ROOT filesystem, so Nextcloud files and media land on the internal SSD -- and a
+# later `mount -a` HIDES that data rather than moving it. Learned the hard way after
+# the drive was unplugged mid-session for a cable swap.
+BULK_MNT="${BULK:-/mnt/bulk}"
+needs_bulk() { case "$1" in cloud|media|download) return 0;; *) return 1;; esac; }
+for s in "${STACKS[@]}"; do
+  if needs_bulk "$s" && ! mountpoint -q "$BULK_MNT"; then
+    echo "!! $BULK_MNT is NOT mounted, and stack '$s' stores data there."
+    echo "   Refusing to start it -- otherwise its data goes to the root disk."
+    echo "   Fix:  sudo mount $BULK_MNT   (then re-run this)"
+    echo "   If the drive was replugged while running, also restart the stacks that"
+    echo "   use it: they keep the stale mount until recreated."
+    exit 1
+  fi
+done
+
 for s in "${STACKS[@]}"; do
   dir="$ROOT/stacks/$s"
   [[ -d "$dir" ]] || { echo "-- no such stack: $s"; continue; }
