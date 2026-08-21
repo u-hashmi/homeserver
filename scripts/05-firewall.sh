@@ -13,6 +13,7 @@ set -euo pipefail
 LAN="${LAN:-192.168.1.0/24}"
 WG="${WG:-10.8.0.0/24}"
 WG_PORT="${WG_PORT:-51820}"
+EDGE_SUBNET="${EDGE_SUBNET:-172.28.0.0/16}"
 
 echo "==> LAN=$LAN  WG=$WG  wireguard port=$WG_PORT"
 read -rp "correct? [y/N] " ok; [[ "$ok" == y || "$ok" == Y ]] || exit 1
@@ -42,6 +43,12 @@ sudo ufw allow from "$LAN" to any port 1900 proto udp comment 'plex dlna/ssdp'
 # mDNS, so homeserver.local resolves on the LAN and you never have to hunt for
 # the IP after a DHCP lease changes.
 sudo ufw allow from "$LAN" to any port 5353 proto udp comment 'mdns'
+
+# Docker containers on the edge bridge need to reach Plex, which runs on the HOST
+# network. Without this, Sonarr/Radarr cannot notify Plex on import and fail with
+# "Http request timed out" -- the containers' source address is 172.28.x.x, which
+# neither the LAN nor the WireGuard rule covers.
+sudo ufw allow from "${EDGE_SUBNET:-172.28.0.0/16}" to any port 32400 proto tcp comment 'plex from docker containers'
 
 sudo ufw logging low
 sudo ufw --force enable
