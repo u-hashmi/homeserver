@@ -22,7 +22,8 @@ services:
     # want a WireGuard private key. env_file passes through only what you actually set.
     env_file: .env
     environment:
-      - VPN_TYPE=wireguard
+      # VPN_TYPE comes from .env: it is per-provider, not universal. gluetun supports
+      # WireGuard for only some providers -- PIA is OpenVPN-only there.
       # Refuse to run on a server without an inbound port, so torrents are
       # connectable rather than silently upload-only.
       - PORT_FORWARD_ONLY=on
