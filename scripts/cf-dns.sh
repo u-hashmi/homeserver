@@ -28,10 +28,20 @@ API=https://api.cloudflare.com/client/v4
 auth=(-H "Authorization: Bearer $CF_DNS_API_TOKEN" -H "Content-Type: application/json")
 
 api() { curl -fsS "${auth[@]}" "$@"; }
+try() { curl -sS "${auth[@]}" "$@" 2>/dev/null; }   # non-fatal: no -f, survives 401
 
+# Cloudflare has two token kinds with two different verify endpoints. User-owned
+# tokens verify at /user/tokens/verify; ACCOUNT-owned tokens 401 there and must
+# use /accounts/<id>/tokens/verify. Try both, and treat neither working as a
+# warning rather than fatal -- the zone lookup below is what actually matters.
 echo "==> verifying the token"
-api "$API/user/tokens/verify" | grep -q '"status":"active"' \
-  || { echo "!! token is not active"; exit 1; }
+verified=0
+try "$API/user/tokens/verify" | grep -q '"status":"active"' && { verified=1; echo "    user-owned token, active"; }
+if [[ $verified -eq 0 && -n "${CF_ACCOUNT_ID:-}" ]]; then
+  try "$API/accounts/$CF_ACCOUNT_ID/tokens/verify" | grep -q '"status":"active"' \
+    && { verified=1; echo "    account-owned token, active"; }
+fi
+[[ $verified -eq 1 ]] || echo "    note: neither verify endpoint confirmed it; continuing"
 
 echo "==> looking up zone $ZONE"
 ZONE_ID="$(api "$API/zones?name=$ZONE" | sed -n 's/.*"result":\[{"id":"\([a-f0-9]*\)".*/\1/p')"
