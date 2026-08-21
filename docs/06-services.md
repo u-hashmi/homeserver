@@ -65,7 +65,8 @@ First start takes 2–5 minutes to install. Then `https://nextcloud.<domain>`.
 > `/var/www/html` is empty, and by then it is populated. Finish it by hand:
 >
 > ```bash
-> docker exec -u www-data nextcloud php occ maintenance:install >   --database pgsql --database-host nextcloud-db --database-name nextcloud >   --database-user nextcloud --database-pass "$(grep -oP '(?<=^POSTGRES_PASSWORD=).*' stacks/cloud/.env)" >   --admin-user hash --admin-pass '<your-admin-password>' --data-dir /var/www/data
+> PG=$(grep -oP '(?<=^POSTGRES_PASSWORD=).*' stacks/cloud/.env)
+> docker exec -u www-data nextcloud php occ maintenance:install --database pgsql --database-host nextcloud-db --database-name nextcloud --database-user nextcloud --database-pass "$PG" --admin-user hash --admin-pass "<your-admin-password>" --data-dir /var/www/data
 > ```
 
 ### Post-install, in this order
