@@ -17,20 +17,19 @@ services:
     cap_add: [NET_ADMIN]
     devices:
       - /dev/net/tun:/dev/net/tun
+    # Provider-specific settings live in .env, because they differ by provider:
+    # PIA authenticates to its own API with account credentials, while Proton/Mullvad
+    # want a WireGuard private key. env_file passes through only what you actually set.
+    env_file: .env
     environment:
-      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER}
       - VPN_TYPE=wireguard
-      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
-      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES:-10.2.0.2/32}
-      - SERVER_COUNTRIES=${SERVER_COUNTRIES}
-      # Ask the provider for an inbound port and refuse to run without one, so
-      # torrents are connectable instead of silently upload-only.
-      - VPN_PORT_FORWARDING=${VPN_PORT_FORWARDING:-on}
+      # Refuse to run on a server without an inbound port, so torrents are
+      # connectable rather than silently upload-only.
       - PORT_FORWARD_ONLY=on
       # Hand the forwarded port straight to qBittorrent. Requires "Bypass
-      # authentication for clients on localhost" enabled in the qBittorrent WebUI.
+      # authentication for clients on localhost" in the qBittorrent WebUI.
       - VPN_PORT_FORWARDING_UP_COMMAND=/bin/sh -c 'wget -qO- --post-data "json={\"listen_port\":{{PORTS}},\"random_port\":false,\"upnp\":false}" http://127.0.0.1:8080/api/v2/app/setPreferences'
-      # Let the reverse proxy and the LAN reach the two services inside this netns.
+      # Let the reverse proxy and the LAN reach the services inside this netns.
       - FIREWALL_OUTBOUND_SUBNETS=${EDGE_SUBNET:-172.28.0.0/16},${LAN_SUBNET:-192.168.1.0/24}
       - DOT=on
       - TZ=${TZ:-America/New_York}
