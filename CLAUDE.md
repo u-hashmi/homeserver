@@ -114,12 +114,26 @@ Next:
       `100.64.x.x`-`100.127.x.x`, port forwarding cannot work and the plan is to
       swap wg-easy for Tailscale.
 - [ ] WireGuard peers (wg-easy UI, QR codes)
-- [ ] Plex setup wizard, then: Remote Access OFF, LAN Networks
+- [x] Plex claimed and configured: Remote Access + Relay OFF, LAN Networks
       `192.168.1.0/24,10.8.0.0/24`, custom access URL `http://192.168.1.50:32400`,
-      hardware transcoding (needs Plex Pass), libraries on `/data/library/*`
+      transcode dir `/transcode`, Butler window 3-5am, FS-event scanning on, and
+      four libraries (Movies, TV, Music, Audiobooks) on `/data/library/*`.
+      **No Plex Pass** (`myPlexSubscription=0`) so QuickSync stays inactive --
+      set clients to Original quality so they direct-play.
+- [x] Sonarr/Radarr notify Plex on import (needed a ufw rule: containers reach
+      host-network Plex from 172.28.x.x, which no existing rule covered)
 - [ ] Prowlarr indexers -- the owner's choice, do not pick for them
-- [ ] **kalshi** stack -- deploy via `scripts/deploy-kalshi.ps1` from Windows
-- [ ] `08-backups.md` -- restic repo + systemd timer
+- [x] **kalshi** stack deployed **live + paper** (owner's explicit choice after the
+      real-money warning). Kalshi WS + Coinbase + Kraken feeds connected, SQLite in
+      WAL mode on the internal SSD, dashboard behind the house proxy at
+      `kalshi.home.coder-geist.com` with the repo's own Basic Auth intact.
+- [x] Backups: restic repo on the T5, nightly systemd timer at 04:23, restore
+      tested. **The passphrase is at `/root/.restic-password` and must be copied
+      off the machine** -- a repo whose only key lives on the disk it protects is
+      not a backup.
+- [ ] Prowlarr indexers -- the owner's choice. Do not pick trackers for them.
+      Everything downstream is already wired, so adding an indexer is the only
+      remaining step before the chain works end to end.
 - [ ] Optional: 16 GB RAM; Bazarr (behind the `full` profile)
 
 ## Gotchas already hit — fixed, but know why
@@ -145,6 +159,10 @@ Next:
 | qBittorrent API login looks like it fails but does not | qBittorrent 5.x names the session cookie `QBT_SID_<port>`, not `SID` |
 | Both *arr apps need `gluetun` as the download-client host | Not `qbittorrent` -- gluetun owns that network namespace, so the container name does not resolve |
 | ddns-updater: "permission denied" on updates.json | It runs as uid 1000, so `/srv/apps/vpn/ddns` must be owned by 1000 |
+| Kalshi bot: `open db  error="unable to open database file: out of memory (14)"` | Misleading message -- SQLite 14 is `CANTOPEN`, i.e. **permissions**. The image runs as **uid 10001 (`app`)**, so `data/` must be `chown 10001:10001`. `keys/` and `deploy/` want owner `hash` with **group 10001** and mode 750/640, so the container can read them while the shell user can still manage them (chmod 700 there locks out `kalshi.sh`'s own preflight) |
+| Transferring the bot repo hangs for many minutes | The working tree carries gigabytes of untracked Parquet tick archives -- `du` on it times out. Do not tar the directory. `git archive --format=tar HEAD` emits only tracked files (1.1 MB) by construction, then `scp` the five git-ignored secret files separately. `deploy-kalshi.ps1` also pipes gzip through a PowerShell pipeline, which re-encodes bytes as text and corrupts the stream -- run the transfer from Git Bash instead |
+| Plex link on the landing page fails with `PR_END_OF_FILE_ERROR` | **HSTS is scoped to the host, not the port.** After the browser sees `Strict-Transport-Security` for the domain it force-upgrades every `http://` URL on that host, including `:32400`, where Plex answers plain HTTP. Link Plex and Cockpit by **IP literal**, which the policy does not cover |
+| Sonarr/Radarr cannot reach Plex: "Http request timed out" | Plex is `network_mode: host`; containers reach it from `172.28.x.x`, which neither the LAN nor WireGuard ufw rule covered. Fixed in `05-firewall.sh` |
 
 ## Conventions
 
