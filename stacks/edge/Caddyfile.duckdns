@@ -1,0 +1,117 @@
+# DuckDNS variant. Structurally different from the Cloudflare one, and the reason is
+# worth knowing:
+#
+# DuckDNS can only write the ACME TXT record at the ROOT of your domain
+# (_acme-challenge.<name>.duckdns.org). A per-subdomain cert for
+# nextcloud.<name>.duckdns.org would need the challenge one level deeper, which
+# DuckDNS cannot do. So this asks for ONE WILDCARD cert covering *.<name>.duckdns.org
+# and routes by Host header inside a single site block.
+#
+# DOMAIN here is your SERVICES domain, pointed at the server's PRIVATE LAN IP.
+# The WireGuard endpoint is a SECOND DuckDNS domain pointed at your public IP —
+# see stacks/vpn. Keeping them separate is what lets the tunnel stay split-tunnel.
+
+{
+	email {$ACME_EMAIL}
+}
+
+(sec) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer-when-downgrade"
+		-Server
+	}
+	encode zstd gzip
+	log {
+		output stdout
+		format console
+	}
+}
+
+{$DOMAIN}, *.{$DOMAIN} {
+	import sec
+
+	tls {
+		dns duckdns {$DUCKDNS_TOKEN}
+		# Ask the public resolvers directly: the server's own resolver may still be
+		# serving a cached negative answer for the challenge record.
+		resolvers 1.1.1.1 8.8.8.8
+		propagation_delay 30s
+		propagation_timeout 5m
+	}
+
+	# ---- Nextcloud ----------------------------------------------------------
+	@nextcloud host nextcloud.{$DOMAIN}
+	handle @nextcloud {
+		redir /.well-known/carddav   /remote.php/dav 301
+		redir /.well-known/caldav    /remote.php/dav 301
+		redir /.well-known/webfinger /index.php/.well-known/webfinger 301
+		redir /.well-known/nodeinfo  /index.php/.well-known/nodeinfo 301
+		reverse_proxy nextcloud:80
+	}
+
+	# ---- Audiobookshelf (audiobooks; Prologue can use Plex instead) ---------
+	@books host books.{$DOMAIN}
+	handle @books {
+		reverse_proxy audiobookshelf:80
+	}
+
+	# ---- Kalshi-Flipper dashboard ------------------------------------------
+	# The bot repo ships its own Caddy serving the built React dashboard with Basic
+	# Auth over /api and /ws. Kept as-is; we only terminate TLS out here.
+	@kalshi host kalshi.{$DOMAIN}
+	handle @kalshi {
+		reverse_proxy kalshi-caddy:80 {
+			flush_interval -1        # the dashboard holds a long-lived WebSocket
+		}
+	}
+
+	# ---- WireGuard admin UI ------------------------------------------------
+	@wg host wg.{$DOMAIN}
+	handle @wg {
+		reverse_proxy wg-easy:51821
+	}
+
+	# ---- download stack ----------------------------------------------------
+	# qbittorrent and prowlarr share gluetun's netns, so gluetun owns their ports.
+	@qbt host qbt.{$DOMAIN}
+	handle @qbt {
+		reverse_proxy gluetun:8080
+	}
+	@prowlarr host prowlarr.{$DOMAIN}
+	handle @prowlarr {
+		reverse_proxy gluetun:9696
+	}
+	@sonarr host sonarr.{$DOMAIN}
+	handle @sonarr {
+		reverse_proxy sonarr:8989
+	}
+	@radarr host radarr.{$DOMAIN}
+	handle @radarr {
+		reverse_proxy radarr:7878
+	}
+	@bazarr host bazarr.{$DOMAIN}
+	handle @bazarr {
+		reverse_proxy bazarr:6767
+	}
+
+	# ---- ops (optional stack) ---------------------------------------------
+	@status host status.{$DOMAIN}
+	handle @status {
+		reverse_proxy uptime-kuma:3001
+	}
+	@logs host logs.{$DOMAIN}
+	handle @logs {
+		reverse_proxy dozzle:8080
+	}
+
+	# ---- anything else: the landing page ----------------------------------
+	handle {
+		root * /srv/site
+		file_server
+	}
+}
+
+# Plex is deliberately absent: it runs on the host network and serves its own valid
+# TLS on :32400 via *.plex.direct. Proxying it breaks client discovery for no gain.

@@ -1,13 +1,11 @@
 {
   "settings": [
     {
-      "provider": "cloudflare",
-      "zone_identifier": "YOUR_CLOUDFLARE_ZONE_ID",
-      "domain": "vpn.home.example.com",
-      "ttl": 60,
-      "token": "CLOUDFLARE_API_TOKEN_WITH_DNS_EDIT",
+      "provider": "duckdns",
+      "domain": "hashvpn.duckdns.org",
+      "token": "YOUR_DUCKDNS_TOKEN",
       "ip_version": "ipv4",
-      "proxied": false
+      "provider_ip": true
     }
   ]
 }
