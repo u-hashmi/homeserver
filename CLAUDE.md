@@ -42,7 +42,24 @@ transcode needs. There is **no HEVC encode**.
 - Transcode scratch is `/dev/shm` at 3.9 GB. Fine for 1080p; move it to the T5
   before attempting 4K transcodes.
 
-Current profile is quality id 6 (HD 720p/1080p) on both Radarr and Sonarr.
+**Now on 4K WEB-DL** (owner watches on iPad + Roku smart TV):
+
+- Radarr profile **id 7 "4K WEB-DL (English)"**, `language: English`, cutoff group
+  **1003** (WEB 2160p). Allows 2160p WEB/HDTV and 1080p as fallback; **excludes
+  Bluray-2160p and Remux-2160p** (60-90 GB each).
+- Sonarr profile **id 7 "4K WEB-DL"**, same cutoff. Sonarr profiles have **no
+  `language` field** -- language is handled by a release profile instead
+  ("Prefer English", hard-ignores `nnm-club` and `zamunda`).
+- Radarr's `/api/v3/restriction` endpoint **silently accepts and discards** in v6;
+  restrictions moved to custom formats. The profile's `language: English` is what
+  actually filters, and it works.
+- Cutoff must be a **group id** (1003), not a bare quality id -- posting the quality
+  id fails with "Cutoff must be an allowed quality or group".
+- Consequence of 4K: ~16-21 GB per film, so ~45 films fit in 907 GB, and downloads
+  take hours rather than minutes on public trackers. Remote 4K over WireGuard will
+  exceed residential upload.
+- **Open risk:** if the Roku is a 1080p model it cannot decode 4K, so Plex would have
+  to transcode -- which needs Plex Pass. Revert both profiles to id 6 if so.
 
 ## Environment specifics
 
