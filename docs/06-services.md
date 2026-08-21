@@ -52,6 +52,22 @@ cp stacks/cloud/.env.example stacks/cloud/.env
 
 First start takes 2–5 minutes to install. Then `https://nextcloud.<domain>`.
 
+> **If it says "Cannot create or write into the data directory"** in
+> `docker logs nextcloud`: the data directory on `/mnt/bulk` is owned by uid 1000
+> instead of **uid 33 (www-data)**, which is what the container runs as.
+> `02-storage.sh` sets this correctly now, but to repair an existing install:
+>
+> ```bash
+> sudo chown -R 33:33 /mnt/bulk/nextcloud-data && sudo chmod 750 /mnt/bulk/nextcloud-data
+> ```
+>
+> Restarting is *not* enough afterwards — the image only auto-installs when
+> `/var/www/html` is empty, and by then it is populated. Finish it by hand:
+>
+> ```bash
+> docker exec -u www-data nextcloud php occ maintenance:install >   --database pgsql --database-host nextcloud-db --database-name nextcloud >   --database-user nextcloud --database-pass "$(grep -oP '(?<=^POSTGRES_PASSWORD=).*' stacks/cloud/.env)" >   --admin-user hash --admin-pass '<your-admin-password>' --data-dir /var/www/data
+> ```
+
 ### Post-install, in this order
 
 1. **Notes** — Apps → search "Notes" → Enable. That is the server side of Nextcloud

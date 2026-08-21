@@ -90,8 +90,15 @@ sudo mkdir -p \
 
 sudo chown -R "$UID_N:$GID_N" /srv/apps
 if [[ $NO_BULK -eq 0 ]]; then
-  sudo chown -R "$UID_N:$GID_N" "$MNT"/media "$MNT"/nextcloud-data
+  sudo chown -R "$UID_N:$GID_N" "$MNT"/media
   sudo chmod -R 775 "$MNT"/media
+  # Nextcloud runs as www-data (uid 33) inside its container, NOT as PUID. Leaving
+  # this owned by uid 1000 makes the first-run installer fail with
+  # "Cannot create or write into the data directory", and because the image only
+  # auto-installs when /var/www/html is empty, a later restart will not retry --
+  # you end up finishing it by hand with `occ maintenance:install`.
+  sudo chown -R 33:33 "$MNT"/nextcloud-data
+  sudo chmod 750 "$MNT"/nextcloud-data
   sudo chown -R root:root "$MNT"/backups
   sudo chmod 700 "$MNT"/backups
 fi
