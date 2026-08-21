@@ -7,7 +7,7 @@ not obvious from the files.
 ## What this is
 
 Converting a **Lenovo ThinkCentre M910q Tiny** into a 24/7 home server: Nextcloud
-(+ Notes), Plex (for Plexamp and the Prologue iOS audiobook client), Audiobookshelf,
+(+ Notes), Plex (movies/TV, plus the Prologue iOS audiobook client), Audiobookshelf,
 a WireGuard VPN, an *arr + qBittorrent download stack behind a commercial VPN, and
 the owner's **kalshi-flipper** trading bot.
 
@@ -117,7 +117,8 @@ Next:
 - [x] Plex claimed and configured: Remote Access + Relay OFF, LAN Networks
       `192.168.1.0/24,10.8.0.0/24`, custom access URL `http://192.168.1.50:32400`,
       transcode dir `/transcode`, Butler window 3-5am, FS-event scanning on, and
-      four libraries (Movies, TV, Music, Audiobooks) on `/data/library/*`.
+      three libraries (Movies, TV, Audiobooks) on `/data/library/*` -- the Music
+      library was removed since the owner does not use Plexamp.
       **No Plex Pass** (`myPlexSubscription=0`) so QuickSync stays inactive --
       set clients to Original quality so they direct-play.
 - [x] Sonarr/Radarr notify Plex on import (needed a ufw rule: containers reach

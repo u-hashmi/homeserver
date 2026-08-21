@@ -100,7 +100,7 @@ First start takes 2–5 minutes to install. Then `https://nextcloud.<domain>`.
 
 ---
 
-## media — Plex, Plexamp, Prologue, Audiobookshelf
+## media — Plex, Prologue, Audiobookshelf
 
 ```bash
 # grab a claim token first — valid 4 minutes
@@ -140,11 +140,12 @@ docker exec plex intel_gpu_top          # the Video engine should show activity
 |---|---|---|
 | Movies | Movies | `/data/library/movies` |
 | TV | TV Shows | `/data/library/tv` |
-| Music | Music | `/data/library/music` |
 | Audiobooks | Music, agent set for audiobooks | `/data/library/audiobooks` |
 
-**Plexamp** — free app, points at the Music library. Over WireGuard it connects
-directly. Offline sync and a few extras need Plex Pass.
+No **Music** library: the owner does not use Plexamp, so it was removed. The
+`/mnt/bulk/media/library/music` folder is left in place (empty, costs nothing) so
+adding the library back later is a one-click job. Note Plexamp is a *client* app —
+there was never a server-side component to remove.
 
 **Prologue** — iOS audiobook player that reads a Plex *Music* library. Set the
 Audiobooks library's agent and scanner for audiobooks, and organise files as
