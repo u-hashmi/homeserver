@@ -58,8 +58,17 @@
   </ul>
 </main>
 <script>
-  // Every service is a subdomain of the domain this page is served on, so the same
-  // file works for DOMAIN=home.example.com and DOMAIN=home.arpa with no editing.
+  // ---- set this to the server's LAN IP -------------------------------------
+  // Plex (:32400) and Cockpit (:9090) are NOT behind the reverse proxy, so they
+  // must be linked by IP, not by hostname. HSTS is scoped to the HOST, not the
+  // port: once the browser has seen Strict-Transport-Security for this domain it
+  // force-upgrades every http:// URL on it, including other ports. Linking Plex
+  // as http://<domain>:32400 therefore fails with PR_END_OF_FILE_ERROR, because
+  // Plex answers plain HTTP there. An IP literal is not covered by that policy.
+  const LAN_IP = "192.168.1.50";
+
+  // Proxied services are subdomains of whatever domain served this page, so the
+  // same file works for any domain with no editing.
   const sub = n => location.protocol + "//" + n + "." + location.hostname;
   for (const [id, name] of Object.entries({
     nc: "nextcloud", books: "books", kalshi: "kalshi",
@@ -67,7 +76,7 @@
     radarr: "radarr", bazarr: "bazarr", wg: "wg",
     status: "status", logs: "logs",
   })) document.getElementById(id).href = sub(name);
-  // Plex and Cockpit are on host ports, not vhosts — resolve them to this machine.
-  document.getElementById('plex').href = 'http://' + location.hostname + ':32400/web';
-  document.getElementById('cockpit').href = 'https://' + location.hostname + ':9090';
+
+  document.getElementById("plex").href = "http://" + LAN_IP + ":32400/web";
+  document.getElementById("cockpit").href = "https://" + LAN_IP + ":9090";
 </script>
