@@ -18,10 +18,31 @@ Repo layout: `docs/` numbered build guide, `scripts/` idempotent host setup,
 
 | | |
 |---|---|
-| CPU | i5-6500T, 4C/4T, 35 W. Intel HD 530 → QuickSync (H.264, HEVC 8-bit) |
+| CPU | i5-**7500T** (Kaby Lake), 4C/4T, 35 W. Intel HD 630 → QuickSync: H.264 decode+encode, **HEVC Main10 decode** (verified via vainfo). No HEVC encode |
 | RAM | **8 GB.** Full stack idles ~3.2 GB. 16 GB (2× 8 GB DDR4-2400 SODIMM) recommended but explicitly deferred — owner is not ordering yet |
 | SSD | 256 GB internal → `/srv/apps/*`, all databases, OS |
 | Bulk | **Samsung Portable SSD T5, 931.5 GB** (an SSD, not a spinning disk) → ext4, `/mnt/bulk`, 916 GB usable. Currently linked at **USB 2.0 / 480 Mb/s** — wrong port or cable, worth fixing before loading media |
+
+## 4K: what this hardware can and cannot do
+
+The listing said i5-6500T (Skylake); the machine is actually an **i5-7500T
+(Kaby Lake)**. That matters: Kaby Lake added HEVC 10-bit decode, which Skylake
+lacks. `vainfo` on the host confirms `HEVCMain10: VAEntrypointVLD` (decode) and
+`H264High: VAEntrypointEncSliceLP` (encode) -- exactly the pipeline a 4K->1080p
+transcode needs. There is **no HEVC encode**.
+
+- **4K direct play: fine.** The server only moves bytes.
+- **4K transcode: hardware-capable but needs Plex Pass**, which the owner does not
+  have (`myPlexSubscription=0`). Without it, software HEVC decode of 4K on 4 cores
+  will stutter.
+- **Storage is the binding constraint**: 907 GB free means ~10-14 4K remuxes, or
+  ~35-60 4K WEB-DLs, or ~60-110 1080p files.
+- **Remote 4K over WireGuard is limited by upload**, not the server. A remux at
+  60-90 Mbps will not fit residential upload.
+- Transcode scratch is `/dev/shm` at 3.9 GB. Fine for 1080p; move it to the T5
+  before attempting 4K transcodes.
+
+Current profile is quality id 6 (HD 720p/1080p) on both Radarr and Sonarr.
 
 ## Environment specifics
 

@@ -4,7 +4,7 @@
 
 | Part | Spec | Verdict |
 |------|------|---------|
-| CPU | i5-6500T, 4C/4T, 35 W, Skylake | Fine. Intel HD 530 = QuickSync (H.264 + HEVC 8-bit) |
+| CPU | i5-7500T, 4C/4T, 35 W, Skylake | Fine. Intel HD 630 = QuickSync (H.264 + HEVC 8-bit) |
 | RAM | 8 GB | **Tight.** Works, but see below |
 | Boot disk | 256 GB SSD | Enough for OS + configs + databases. Not for media |
 | Bulk disk | 1 TB external USB3 | Media + Nextcloud files + backups |

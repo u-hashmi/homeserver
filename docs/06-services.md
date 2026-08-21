@@ -124,7 +124,7 @@ discovery and gains nothing.
 | Remote Access | **Disabled** | You reach it over WireGuard. Do not punch a hole |
 | Network → Custom server access URLs | `http://192.168.1.50:32400` | So Plexamp and Prologue find it over the tunnel |
 | Network → LAN Networks | `192.168.1.0/24,10.8.0.0/24` | Marks tunnel clients as local, so Plex direct-plays instead of transcoding |
-| Transcoder → Hardware acceleration | On | Needs **Plex Pass**. Without it the i5-6500T manages about one 1080p stream in software |
+| Transcoder → Hardware acceleration | On | Needs **Plex Pass**. Without it the i5-7500T manages about one 1080p stream in software |
 | Transcoder → temporary directory | `/transcode` | Already mapped to `/dev/shm` — transcodes in RAM, saving SSD writes |
 | Library → Scheduled tasks | 3–5am | Keeps thumbnail generation away from trading hours |
 
