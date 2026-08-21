@@ -1,5 +1,16 @@
-# Real certs, no open ports: Caddy proves domain control over Cloudflare DNS, so the
-# A records can point at a private 192.168.x.x address and still get valid TLS.
+# Cloudflare DNS-01, ONE wildcard cert for *.{$DOMAIN}.
+#
+# Why a wildcard rather than a site block per service: one ACME order instead of a
+# dozen, and adding a service later needs no new certificate — just a Host matcher.
+#
+# Why this works with nothing exposed: Caddy proves control of the domain over
+# Cloudflare's DNS API, so the A records can point at a private 192.168.x.x address
+# and still carry a valid public certificate. No port is opened to get it.
+#
+# DOMAIN is the SERVICES domain (home.coder-geist.com), pointed at the server's LAN
+# IP. The WireGuard endpoint is a separate record on the apex zone (vpn.coder-geist.com)
+# pointed at the public IP and kept current by ddns-updater — see stacks/vpn.
+
 {
 	email {$ACME_EMAIL}
 	acme_dns cloudflare {$CF_DNS_API_TOKEN}
@@ -19,81 +30,80 @@
 	}
 }
 
-# ---- landing page ------------------------------------------------------------
-{$DOMAIN} {
+{$DOMAIN}, *.{$DOMAIN} {
 	import sec
-	root * /srv/site
-	file_server
-}
 
-# ---- Nextcloud --------------------------------------------------------------
-nextcloud.{$DOMAIN} {
-	import sec
-	# Service-discovery paths Nextcloud's own setup check complains about otherwise.
-	redir /.well-known/carddav   /remote.php/dav 301
-	redir /.well-known/caldav    /remote.php/dav 301
-	redir /.well-known/webfinger /index.php/.well-known/webfinger 301
-	redir /.well-known/nodeinfo  /index.php/.well-known/nodeinfo 301
-	reverse_proxy nextcloud:80
-}
+	# ---- Nextcloud ----------------------------------------------------------
+	@nextcloud host nextcloud.{$DOMAIN}
+	handle @nextcloud {
+		redir /.well-known/carddav   /remote.php/dav 301
+		redir /.well-known/caldav    /remote.php/dav 301
+		redir /.well-known/webfinger /index.php/.well-known/webfinger 301
+		redir /.well-known/nodeinfo  /index.php/.well-known/nodeinfo 301
+		reverse_proxy nextcloud:80
+	}
 
-# ---- Audiobooks (Audiobookshelf; Prologue can use this or Plex) -------------
-books.{$DOMAIN} {
-	import sec
-	reverse_proxy audiobookshelf:80
-}
+	# ---- Audiobookshelf -----------------------------------------------------
+	@books host books.{$DOMAIN}
+	handle @books {
+		reverse_proxy audiobookshelf:80
+	}
 
-# ---- Kalshi-Flipper dashboard ----------------------------------------------
-# The bot repo ships its own Caddy that serves the built React dashboard and adds
-# Basic Auth over /api and /ws. We keep it and just terminate TLS out here.
-kalshi.{$DOMAIN} {
-	import sec
-	reverse_proxy kalshi-caddy:80 {
-		# The dashboard holds a long-lived WebSocket on /ws.
-		flush_interval -1
+	# ---- Kalshi-Flipper dashboard ------------------------------------------
+	# The bot repo ships its own Caddy serving the built React dashboard with Basic
+	# Auth over /api and /ws. Kept as-is; we only terminate TLS out here.
+	@kalshi host kalshi.{$DOMAIN}
+	handle @kalshi {
+		reverse_proxy kalshi-caddy:80 {
+			flush_interval -1        # the dashboard holds a long-lived WebSocket
+		}
+	}
+
+	# ---- WireGuard admin UI ------------------------------------------------
+	@wg host wg.{$DOMAIN}
+	handle @wg {
+		reverse_proxy wg-easy:51821
+	}
+
+	# ---- download stack ----------------------------------------------------
+	# qbittorrent and prowlarr share gluetun's netns, so gluetun owns their ports.
+	@qbt host qbt.{$DOMAIN}
+	handle @qbt {
+		reverse_proxy gluetun:8080
+	}
+	@prowlarr host prowlarr.{$DOMAIN}
+	handle @prowlarr {
+		reverse_proxy gluetun:9696
+	}
+	@sonarr host sonarr.{$DOMAIN}
+	handle @sonarr {
+		reverse_proxy sonarr:8989
+	}
+	@radarr host radarr.{$DOMAIN}
+	handle @radarr {
+		reverse_proxy radarr:7878
+	}
+	@bazarr host bazarr.{$DOMAIN}
+	handle @bazarr {
+		reverse_proxy bazarr:6767
+	}
+
+	# ---- ops ---------------------------------------------------------------
+	@status host status.{$DOMAIN}
+	handle @status {
+		reverse_proxy uptime-kuma:3001
+	}
+	@logs host logs.{$DOMAIN}
+	handle @logs {
+		reverse_proxy dozzle:8080
+	}
+
+	# ---- anything else: the landing page ----------------------------------
+	handle {
+		root * /srv/site
+		file_server
 	}
 }
 
-# ---- WireGuard admin UI ----------------------------------------------------
-wg.{$DOMAIN} {
-	import sec
-	reverse_proxy wg-easy:51821
-}
-
-# ---- download stack --------------------------------------------------------
-# qbittorrent and prowlarr share gluetun's network namespace, so their ports are
-# published by the gluetun container.
-qbt.{$DOMAIN} {
-	import sec
-	reverse_proxy gluetun:8080
-}
-prowlarr.{$DOMAIN} {
-	import sec
-	reverse_proxy gluetun:9696
-}
-sonarr.{$DOMAIN} {
-	import sec
-	reverse_proxy sonarr:8989
-}
-radarr.{$DOMAIN} {
-	import sec
-	reverse_proxy radarr:7878
-}
-bazarr.{$DOMAIN} {
-	import sec
-	reverse_proxy bazarr:6767
-}
-
-# ---- ops (optional stack) --------------------------------------------------
-status.{$DOMAIN} {
-	import sec
-	reverse_proxy uptime-kuma:3001
-}
-logs.{$DOMAIN} {
-	import sec
-	reverse_proxy dozzle:8080
-}
-
-# Plex is deliberately NOT proxied — it runs on the host network and speaks its own
-# TLS on :32400. Proxying it breaks client discovery for no benefit. See
-# docs/06-services.md.
+# Plex is deliberately absent: it runs on the host network and serves its own valid
+# TLS on :32400 via *.plex.direct. Proxying it breaks client discovery for no gain.
