@@ -218,6 +218,27 @@ Change it immediately, then:
 | BitTorrent → Encryption | Require encryption |
 | Advanced → Network interface | leave default; you are already inside the tunnel |
 
+### Plex Watchlist -> automatic download
+
+Both Radarr and Sonarr poll your **Plex Watchlist** every 5 minutes. Add a title to
+your watchlist in any Plex client and it is searched, downloaded, imported and
+scanned into the library without you touching the *arr UIs.
+
+Configured as an import list of type **Plex Watchlist** (`PlexImport` /
+`PlexListSettings`), authenticated with the Plex *account* token -- the
+`PlexOnlineToken` in `Preferences.xml`, not an app password:
+
+| Setting | Value | Why |
+|---|---|---|
+| Quality profile | `6` (HD - 720p/1080p) | Sensible without hardware transcoding; 4K would force CPU transcodes |
+| `searchOnAdd` / `searchForMissingEpisodes` | on | Otherwise it is added but never searched |
+| Sonarr `shouldMonitor` | `all` | Defaults to `unknown` via the API, which monitors nothing |
+| `listSyncLevel` | `disabled` | Removing a title from your watchlist must not delete your files |
+
+Creating this over the API returns *"No results were returned from your import
+list"* as a blocking error when the watchlist is empty. It is only a warning --
+append `?forceSave=true`.
+
 ### *arr wiring
 
 | App | URL | Points at |

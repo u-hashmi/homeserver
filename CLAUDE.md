@@ -114,6 +114,10 @@ Next:
       `100.64.x.x`-`100.127.x.x`, port forwarding cannot work and the plan is to
       swap wg-easy for Tailscale.
 - [ ] WireGuard peers (wg-easy UI, QR codes)
+- [x] Plex Watchlist -> auto-download wired: `PlexImport` import lists on both
+      Radarr and Sonarr, quality profile 6 (HD 720p/1080p), `searchOnAdd` on,
+      Sonarr `shouldMonitor=all`, `listSyncLevel=disabled` so un-watchlisting
+      never deletes files. ImportListSync runs every 5 minutes.
 - [x] Plex claimed and configured: Remote Access + Relay OFF, LAN Networks
       `192.168.1.0/24,10.8.0.0/24`, custom access URL `http://192.168.1.50:32400`,
       transcode dir `/transcode`, Butler window 3-5am, FS-event scanning on, and
@@ -183,6 +187,37 @@ Next:
   owner's global identity is a work address — do not let it into commits here.
 - The download stack is general-purpose automation. Do not add indexers or content
   suggestions; that is the owner's call.
+
+## Media stack: evaluated a debrid rebuild, decided against it
+
+The owner asked about switching to **Riven + Zilean + rclone + Plex** (debrid
+streaming). After researching it the decision was to **stay local** -- keep
+qBittorrent + PIA + Prowlarr/Sonarr/Radarr + Plex. Do not rebuild this without a
+new explicit request.
+
+What the goal actually was: *"add stuff to the wishlist on Plex and it just gets
+downloaded and ready to watch."* That is now **done, with no new infrastructure** --
+Radarr and Sonarr each have a native **Plex Watchlist import list** (`PlexImport` /
+`PlexListSettings`, authenticated with the Plex account token from
+`Preferences.xml`), syncing every **5 minutes**. Add to the watchlist, it is
+searched, downloaded, hardlinked into the library, and Plex is notified.
+
+Findings from the research, so nobody repeats it:
+
+| Claim | Reality |
+|---|---|
+| Riven + TorBox | **Does not exist.** `src/program/services/downloaders/` has only `realdebrid.py`, `alldebrid.py`, `debridlink.py` |
+| TorBox free tier has API access | **No** -- the API needs a paid plan. Third-party guides claiming otherwise are wrong |
+| Riven needs rclone + zurg | **No longer.** Riven ships its own FUSE VFS (`RIVEN_FILESYSTEM_MOUNT_PATH`, own cache/chunking). zurg is Real-Debrid-only anyway |
+| DMB (Debrid Media Bridge) | **Deprecated** Jan 2026, superseded by DUMB |
+| TorBox with the *arr stack | Works via **Decypharr** (`cy01/blackhole`), which mocks the qBittorrent API and mounts via FUSE. Supports RD, TorBox, AllDebrid, Debrid-Link, Premiumize |
+| Zilean | Usable by Prowlarr as a Torznab indexer, not just by Riven. First DMM ingest is heavy -- would want the 16 GB upgrade first |
+
+If revisited later, the two coherent paths are **Real-Debrid + Riven** (biggest
+cache, native watchlist polling, replaces the *arr apps) or **Real-Debrid +
+Decypharr** (keeps the *arr apps, smaller change). Cache hit rate is what decides
+whether playback is actually instant, and Real-Debrid's is materially larger than
+TorBox's.
 
 ## Owner's stated preferences
 
