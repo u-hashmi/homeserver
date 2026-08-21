@@ -131,9 +131,11 @@ Next:
       tested. **The passphrase is at `/root/.restic-password` and must be copied
       off the machine** -- a repo whose only key lives on the disk it protects is
       not a backup.
-- [ ] Prowlarr indexers -- the owner's choice. Do not pick trackers for them.
-      Everything downstream is already wired, so adding an indexer is the only
-      remaining step before the chain works end to end.
+- [x] Download chain verified end to end: owner added 4 indexers in Prowlarr, all
+      testing valid, live search returns results through the VPN. Radarr/Sonarr
+      have the indexers, qBittorrent as client, root folders, Plex notification on
+      import, and Plex-friendly rename formats. Adding a movie is now fully
+      automatic through to the Plex library.
 - [ ] Optional: 16 GB RAM; Bazarr (behind the `full` profile)
 
 ## Gotchas already hit — fixed, but know why
@@ -164,6 +166,9 @@ Next:
 | Plex link on the landing page fails with `PR_END_OF_FILE_ERROR` | **HSTS is scoped to the host, not the port.** After the browser sees `Strict-Transport-Security` for the domain it force-upgrades every `http://` URL on that host, including `:32400`, where Plex answers plain HTTP. Link Plex and Cockpit by **IP literal**, which the policy does not cover |
 | Sonarr/Radarr cannot reach Plex: "Http request timed out" | Plex is `network_mode: host`; containers reach it from `172.28.x.x`, which neither the LAN nor WireGuard ufw rule covered. Fixed in `05-firewall.sh` |
 | Kalshi dashboard always 401s; caddy logs `bcrypt: hashedSecret too short` | **Docker Compose v5 interpolates `env_file` values.** The bcrypt hash `$2a$14$Ryh...` had `$Ryh...` read as an undefined variable and blanked, leaving just `$2a$14$` (7 bytes). Double every `$` in `deploy/proxy.env` -> `$$2a$$14$$...`. The bot repo's README says env_file values are literal; that was true of older Compose. It fails by silently truncating a secret, not by erroring |
+| Kalshi dashboard loads but every panel is empty, no error anywhere | The bot repo's `deploy/Caddyfile` had a bare `reverse_proxy @api` next to a catch-all `handle { }`. `handle` is a **terminal** handler and sorts BEFORE `reverse_proxy` in Caddy's default directive order, so the catch-all swallowed `/api/*` and `/ws/*` and served `index.html` (200, 536 bytes) for them. Fix: wrap it as `handle @api { reverse_proxy ... }` so both are handle blocks in source order. Symptom is invisible -- 200s with HTML bodies |
+| Phone prompts for the dashboard login over and over | **Browsers cannot send Basic Auth on a WebSocket handshake** -- the WebSocket API has no header parameter, and iOS browsers do not reuse cached credentials for it. `/ws/live` 401s, the dashboard retries, every retry raises a new prompt. Fix: `@needsauth { not path /ws/live /ws/live/* /favicon.svg }` so the WS is exempt. `/api/*` stays protected, which is what matters -- the config-write endpoints live there. `/ws/live` is a read-only market-snapshot push, reachable only via LAN or the tunnel |
+| Importing the local bot DB | Never copy `flipper.db` alone -- a 4 MB `-wal` sat beside it and would have been lost. Stop the bots, back up the server copy, `scp` **db + -wal + -shm together**, `chown 10001:10001`, then `pragma integrity_check` and `wal_checkpoint(TRUNCATE)` before restarting. Imported 56,773 opportunities and 2,085 orders this way |
 
 ## Conventions
 
