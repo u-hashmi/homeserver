@@ -13,7 +13,24 @@ sudo apt-get -y install \
   smartmontools lm-sensors nvme-cli \
   ufw fail2ban unattended-upgrades apt-listchanges \
   zram-tools restic \
-  intel-gpu-tools vainfo intel-media-va-driver-non-free
+  intel-gpu-tools vainfo
+
+# QuickSync verification driver. Lives in Debian's non-free component, which is not
+# enabled by default -- and it only makes `vainfo` on the HOST report codecs
+# accurately. The Plex container ships its own VAAPI drivers, so hardware
+# transcoding does not depend on this. Best-effort on purpose: a missing candidate
+# must never abort the rest of this script.
+if sudo apt-get -y install intel-media-va-driver-non-free 2>/dev/null; then
+  echo '    quicksync verification driver installed'
+else
+  cat <<'NOTE'
+    note: intel-media-va-driver-non-free has no candidate (non-free not enabled).
+          Optional -- Plex transcoding works without it. To enable non-free:
+            sudo sed -i 's/^Components: .*/Components: main contrib non-free non-free-firmware/' \
+              /etc/apt/sources.list.d/debian.sources
+            sudo apt update && sudo apt install intel-media-va-driver-non-free
+NOTE
+fi
 
 echo "==> timezone + ntp"
 sudo timedatectl set-timezone "$TZ_NAME"
