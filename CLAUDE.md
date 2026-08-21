@@ -21,14 +21,21 @@ Repo layout: `docs/` numbered build guide, `scripts/` idempotent host setup,
 | CPU | i5-6500T, 4C/4T, 35 W. Intel HD 530 → QuickSync (H.264, HEVC 8-bit) |
 | RAM | **8 GB.** Full stack idles ~3.2 GB. 16 GB (2× 8 GB DDR4-2400 SODIMM) recommended but explicitly deferred — owner is not ordering yet |
 | SSD | 256 GB internal → `/srv/apps/*`, all databases, OS |
-| Bulk | 1 TB external USB3, permanently attached → `/mnt/bulk/*`, media + Nextcloud files + backups |
+| Bulk | **Samsung Portable SSD T5, 931.5 GB** (an SSD, not a spinning disk) → ext4, `/mnt/bulk`, 916 GB usable. Currently linked at **USB 2.0 / 480 Mb/s** — wrong port or cable, worth fixing before loading media |
 
 ## Environment specifics
 
 - LAN is **`192.168.1.0/24`**, gateway `192.168.1.1`.
-- Currently on **Wi-Fi** (`wlp2s0`), DHCP address `192.168.1.198`. Owner will plug in
-  ethernet later; the wired NIC needs its own DHCP reservation (different MAC), and
-  `sudo rfkill block wifi` afterwards to avoid two default routes.
+- Reach the box as **`homeserver.local`** (avahi/mDNS is installed). Always use
+  `ssh -4` — mDNS answers with the IPv6 address and this ISP's IPv6 path is broken
+  (see gotchas).
+- Server user is **`hash`**, uid/gid **1000**. Passwordless sudo via
+  `/etc/sudoers.d/hash-nopasswd`. SSH is key-only.
+- Was on **Wi-Fi** (`wlp2s0`) at `192.168.1.198`. Owner is relocating the machine to
+  the router to attach ethernet. The wired NIC needs its own DHCP reservation
+  (different MAC), then `sudo rfkill block wifi` to avoid two default routes.
+  NetworkManager (pulled in by Cockpit) will DHCP the wired NIC automatically; only
+  `wlp2s0` is pinned in `/etc/network/interfaces`.
 - The IP must be pinned **before** the `edge` stack is configured — that is where the
   address gets baked into the wildcard DNS record, Plex's custom access URL, the
   router port forward and `deploy-kalshi.ps1`.
@@ -64,25 +71,43 @@ Repo layout: `docs/` numbered build guide, `scripts/` idempotent host setup,
 
 ## Build progress
 
-Done:
+Host build is **complete and reboot-verified** (80 s to full recovery, `/mnt/bulk`
+remounts, all containers return, no failed units).
 
-- [x] Debian 13 installed. "standard system utilities" was missed at the installer and
-      recovered with `tasksel install standard`.
-- [x] `scripts/01-base.sh` — packages, zram + 4 GB swapfile, sysctl, journald caps,
-      unattended security upgrades, sleep masked.
-- [x] Repo pushed to `github.com/u-hashmi/homeserver` and cloned to `/srv/homeserver`.
+- [x] Debian 13 installed
+- [x] `01-base.sh` — zram 3.8G + 4G swapfile + 7.9G partition swap, sysctl, TZ
+      America/New_York, NTP synced, journald capped, sleep masked
+- [x] `03-docker.sh` — Docker 29.7.2, Compose v5.5.0, `edge` net on 172.28.0.0/16
+- [x] `02-storage.sh /dev/sda` — T5 wiped (owner authorised), GPT + ext4 label `bulk`,
+      fstab by UUID with `nofail`, full directory tree, USB autosuspend disabled
+- [x] `04-remote-access.sh` — xrdp + XFCE on :3389, Cockpit on :9090, sshd key-only,
+      fail2ban
+- [x] `05-firewall.sh` — default deny in; only 51820/udp open to the internet
+- [x] avahi/mDNS + `/etc/gai.conf` IPv4 preference (both now folded into `01-base.sh`)
+- [x] `media` stack — plex (unclaimed, wizard pending) + audiobookshelf
+- [x] `ops` stack — uptime-kuma + dozzle
 
-Next, in order:
+Idle footprint: **1.1 GB used, 6.6 GB available** of 7.7 GB.
 
-- [ ] SSH key into `~/.ssh/authorized_keys` (in progress — needed before hardening)
-- [ ] `scripts/03-docker.sh`, then log out/in, then `docker run --rm hello-world`
-- [ ] `scripts/04-remote-access.sh` (XRDP + XFCE + Cockpit + sshd hardening)
-- [ ] `LAN=192.168.1.0/24 scripts/05-firewall.sh`
-- [ ] `scripts/02-storage.sh /dev/sdX` — format + mount the 1 TB
-- [ ] Ethernet cable, DHCP reservation, `rfkill block wifi`
-- [ ] `docs/06-services.md` — edge, vpn, cloud, media, download stacks
-- [ ] `docs/07-kalshi-bot.md` — deploy the bot
-- [ ] `docs/08-backups.md` — restic repo + systemd timer
+Next:
+
+- [ ] Move machine to the router, attach ethernet, DHCP-reserve the wired MAC,
+      `rfkill block wifi`
+- [ ] Owner is buying a **domain for Cloudflare** — when it lands, set
+      `CADDYFILE=Caddyfile` and `CF_DNS_API_TOKEN` in `stacks/edge/.env`.
+      Recommended registrars: Cloudflare Registrar (~$10/yr .com, at cost) or Porkbun
+- [ ] `edge` stack — blocked on that domain + token
+- [ ] `vpn` stack — wg-easy. Owner CAN port-forward. Needs a DuckDNS-or-equivalent
+      hostname for the public IP, and a bcrypt UI password hash
+- [ ] `cloud` stack — Nextcloud. Only needs the domain settled first
+- [ ] `download` stack — **blocked.** Owner has ProtonVPN **Free**, which blocks P2P
+      and has no port forwarding, so gluetun would connect and torrents would never
+      move. Needs a paid plan; suggested AirVPN / PIA / Proton Plus
+- [ ] Plex settings pass (Remote Access OFF, LAN networks incl. 10.8.0.0/24, custom
+      access URL, hardware transcoding — needs Plex Pass)
+- [ ] `kalshi` stack — deploy from the owner's Windows box with
+      `scripts/deploy-kalshi.ps1`
+- [ ] `08-backups.md` — restic repo + systemd timer
 
 ## Gotchas already hit — fixed, but know why
 
@@ -93,6 +118,10 @@ Next, in order:
 | `refusing to operate on linked unit file smartd.service` | The real unit is `smartmontools.service`; `smartd.service` is a symlink alias. Fixed |
 | CRLF risk | `.gitattributes` forces LF on everything the server executes (`.ps1` stays CRLF). A CRLF shebang fails with `bad interpreter: /bin/bash^M` |
 | `ssh-copy-id: no identities found` | Was being run on the *server*, which has no keys. It runs on the client. Windows' bundled OpenSSH has no `ssh-copy-id` either — only Git Bash does |
+| Docker pulls die partway with `connection reset by peer` on a `2600:...` address | This ISP's **IPv6** path to the registry resets mid-transfer. Fixed with `precedence ::ffff:0:0/96 100` in `/etc/gai.conf`. Same reason to prefer `ssh -4` |
+| `sgdisk: command not found` in the storage script | `gdisk` and `parted` are not on a minimal Debian. The script now installs them |
+| DuckDNS cannot do per-subdomain certs | It only writes the ACME TXT at the domain root, so a wildcard cert is mandatory — that is why `Caddyfile.duckdns` is one site block with Host matchers instead of many site blocks |
+| `git pull` refused: local changes | Mode-only diffs (`100644 => 100755`) from the owner's manual `chmod +x`, against an index that predated the exec-bit commit. `git checkout -- scripts/` was safe: zero content changes |
 
 ## Conventions
 

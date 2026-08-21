@@ -39,6 +39,10 @@ done
 sudo ufw allow from "$LAN" to any port 32410,32412,32413,32414 proto udp comment 'plex discovery'
 sudo ufw allow from "$LAN" to any port 1900 proto udp comment 'plex dlna/ssdp'
 
+# mDNS, so homeserver.local resolves on the LAN and you never have to hunt for
+# the IP after a DHCP lease changes.
+sudo ufw allow from "$LAN" to any port 5353 proto udp comment 'mdns'
+
 sudo ufw logging low
 sudo ufw --force enable
 sudo ufw status verbose

@@ -13,7 +13,8 @@ sudo apt-get -y install \
   smartmontools lm-sensors nvme-cli \
   ufw fail2ban unattended-upgrades apt-listchanges \
   zram-tools restic \
-  intel-gpu-tools vainfo
+  intel-gpu-tools vainfo \
+  avahi-daemon libnss-mdns
 
 # QuickSync verification driver. Lives in Debian's non-free component, which is not
 # enabled by default -- and it only makes `vainfo` on the HOST report codecs
@@ -31,6 +32,17 @@ else
             sudo apt update && sudo apt install intel-media-va-driver-non-free
 NOTE
 fi
+
+echo "==> mDNS: answer to homeserver.local so a changed DHCP lease never loses the box"
+sudo systemctl enable --now avahi-daemon
+
+echo "==> prefer IPv4 in getaddrinfo"
+# Some ISP IPv6 paths reset connections mid-transfer -- this showed up as docker
+# pulls dying partway through with "connection reset by peer" on a v6 address.
+# IPv6 still works where it is the only option.
+sudo tee /etc/gai.conf >/dev/null <<'CFG'
+precedence ::ffff:0:0/96  100
+CFG
 
 echo "==> timezone + ntp"
 sudo timedatectl set-timezone "$TZ_NAME"
