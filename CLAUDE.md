@@ -25,26 +25,32 @@ Repo layout: `docs/` numbered build guide, `scripts/` idempotent host setup,
 
 ## Environment specifics
 
-- LAN is **`192.168.1.0/24`**, gateway `192.168.1.1`.
-- Reach the box as **`homeserver.local`** (avahi/mDNS is installed). Always use
-  `ssh -4` — mDNS answers with the IPv6 address and this ISP's IPv6 path is broken
-  (see gotchas).
-- Server user is **`hash`**, uid/gid **1000**. Passwordless sudo via
-  `/etc/sudoers.d/hash-nopasswd`. SSH is key-only.
-- Was on **Wi-Fi** (`wlp2s0`) at `192.168.1.198`. Owner is relocating the machine to
-  the router to attach ethernet. The wired NIC needs its own DHCP reservation
-  (different MAC), then `sudo rfkill block wifi` to avoid two default routes.
-  NetworkManager (pulled in by Cockpit) will DHCP the wired NIC automatically; only
-  `wlp2s0` is pinned in `/etc/network/interfaces`.
-- The IP must be pinned **before** the `edge` stack is configured — that is where the
-  address gets baked into the wildcard DNS record, Plex's custom access URL, the
-  router port forward and `deploy-kalshi.ps1`.
-- Owner cannot easily reach the router physically, but its admin UI is reachable at
-  `http://192.168.1.1` from any device on the LAN.
-- Bot repo lives at `D:\AI\kalshi-flipper` on the owner's Windows box; it deploys to
-  `/srv/apps/kalshi/kalshi-flipper` on the server.
-- This repo is cloned to **`/srv/homeserver`** on the server. `scripts/kalshi.sh` and
-  `scripts/backup.sh` hardcode that path.
+- LAN `192.168.1.0/24`, gateway `192.168.1.1`. Server is **static `192.168.1.50`**
+  on ethernet (`enp0s31f6`, gigabit, NetworkManager profile "Wired connection 1").
+  Wi-Fi is disabled (`nmcli radio wifi off`, and `allow-hotplug wlp2s0` commented
+  out in `/etc/network/interfaces`).
+- Reach it as `homeserver.local` or `192.168.1.50`. **Always `ssh -4`** -- see the
+  IPv6 note in gotchas.
+- User **`hash`**, uid/gid **1000**, passwordless sudo, SSH key-only.
+- Domain **`coder-geist.com`** on Cloudflare (zone `0fc2799adb1ca794059e2ee2ddf02a4a`,
+  account `f1e538439bc4e85979b5269804d7cfb8`). Services live under
+  **`home.coder-geist.com`**; the apex and `www` are deliberately free for a future
+  public site.
+  - `home.coder-geist.com` + `*.home.coder-geist.com` -> `192.168.1.50` (DNS-only)
+  - `vpn.coder-geist.com` -> public IP, kept current by `ddns-updater`
+  - The Cloudflare token is **account-owned**, so it 401s at `/user/tokens/verify`
+    and must use `/accounts/<id>/tokens/verify`.
+- Public IP moves: `173.40.32.72` then `66.168.9.180` within one evening. That is
+  why `ddns-updater` exists. ISP is **Spectrum**; the router is a Sagemcom managed
+  through the **My Spectrum app** (Services -> Router -> Advanced Settings ->
+  Port Forwarding & IP Reservations).
+- Bulk disk is a **Samsung Portable SSD T5**, ext4, `/mnt/bulk`, currently
+  `/dev/sdb1` (it was `sda` before a cable swap -- never hardcode the device node).
+  Now on a USB 3 link: **245 MB/s** measured, up from ~40 MB/s on USB 2.
+- Bot repo is at `D:\AI\kalshi-flipper` on the owner's Windows box; it deploys to
+  `/srv/apps/kalshi/kalshi-flipper`.
+- This repo is cloned to **`/srv/homeserver`**. `scripts/kalshi.sh`,
+  `scripts/backup.sh` and the systemd units hardcode that path.
 
 ## Decisions already made — do not relitigate
 
@@ -71,43 +77,50 @@ Repo layout: `docs/` numbered build guide, `scripts/` idempotent host setup,
 
 ## Build progress
 
-Host build is **complete and reboot-verified** (80 s to full recovery, `/mnt/bulk`
-remounts, all containers return, no failed units).
+Host build and all six stacks are **live and verified**. 16 containers running,
+**1.7 GB used of 7.7 GB**. Every service URL returns valid TLS
+(`ssl_verify_result=0`) from outside the box.
 
-- [x] Debian 13 installed
-- [x] `01-base.sh` — zram 3.8G + 4G swapfile + 7.9G partition swap, sysctl, TZ
-      America/New_York, NTP synced, journald capped, sleep masked
-- [x] `03-docker.sh` — Docker 29.7.2, Compose v5.5.0, `edge` net on 172.28.0.0/16
-- [x] `02-storage.sh /dev/sda` — T5 wiped (owner authorised), GPT + ext4 label `bulk`,
-      fstab by UUID with `nofail`, full directory tree, USB autosuspend disabled
-- [x] `04-remote-access.sh` — xrdp + XFCE on :3389, Cockpit on :9090, sshd key-only,
-      fail2ban
-- [x] `05-firewall.sh` — default deny in; only 51820/udp open to the internet
-- [x] avahi/mDNS + `/etc/gai.conf` IPv4 preference (both now folded into `01-base.sh`)
-- [x] `media` stack — plex (unclaimed, wizard pending) + audiobookshelf
-- [x] `ops` stack — uptime-kuma + dozzle
+Done:
 
-Idle footprint: **1.1 GB used, 6.6 GB available** of 7.7 GB.
+- [x] Debian 13, `01-base.sh`, `03-docker.sh`, `04-remote-access.sh`, `05-firewall.sh`
+- [x] `02-storage.sh /dev/sda` -- T5 wiped and ext4, 916 GB at `/mnt/bulk`
+- [x] Static IP `.50`, Wi-Fi off, single default route
+- [x] **edge** -- Caddy built with cloudflare+duckdns modules, ONE wildcard cert for
+      `*.home.coder-geist.com`, auto-renewing, zero ports opened to obtain it
+- [x] **cloud** -- Nextcloud 31.0.14 + Postgres 17 + Redis; Notes, Calendar,
+      Contacts, Tasks enabled; both setup warnings cleared; data on the T5
+- [x] **media** -- Plex (unclaimed, wizard still pending) + Audiobookshelf
+- [x] **ops** -- Uptime Kuma + Dozzle
+- [x] **vpn** -- wg-easy on 51820/udp + ddns-updater on Cloudflare
+- [x] **download** -- gluetun/PIA (OpenVPN, CA Montreal) + qBittorrent + Prowlarr
+      inside the netns; Sonarr/Radarr outside. Killswitch verified: host
+      `66.168.9.180` vs qbt/prowlarr `140.228.24.x`. Root folders and the
+      qBittorrent client wired; Prowlarr knows both apps.
+- [x] `qbt-port-sync` systemd timer (10 min) reconciling PIA's forwarded port
+
+Credentials issued (all in git-ignored `.env` files, mode 600):
+
+| Service | User | Password |
+|---|---|---|
+| Nextcloud | `hash` | `ejVxDF3xsPC78ABUQiW1mR` |
+| qBittorrent | `admin` | `2xUzyGVH2wjwuCUV` |
+| wg-easy UI | -- | `8idZCLtlexHsw8rO` |
 
 Next:
 
-- [ ] Move machine to the router, attach ethernet, DHCP-reserve the wired MAC,
-      `rfkill block wifi`
-- [ ] Owner is buying a **domain for Cloudflare** — when it lands, set
-      `CADDYFILE=Caddyfile` and `CF_DNS_API_TOKEN` in `stacks/edge/.env`.
-      Recommended registrars: Cloudflare Registrar (~$10/yr .com, at cost) or Porkbun
-- [ ] `edge` stack — blocked on that domain + token
-- [ ] `vpn` stack — wg-easy. Owner CAN port-forward. Needs a DuckDNS-or-equivalent
-      hostname for the public IP, and a bcrypt UI password hash
-- [ ] `cloud` stack — Nextcloud. Only needs the domain settled first
-- [ ] `download` stack — **blocked.** Owner has ProtonVPN **Free**, which blocks P2P
-      and has no port forwarding, so gluetun would connect and torrents would never
-      move. Needs a paid plan; suggested AirVPN / PIA / Proton Plus
-- [ ] Plex settings pass (Remote Access OFF, LAN networks incl. 10.8.0.0/24, custom
-      access URL, hardware transcoding — needs Plex Pass)
-- [ ] `kalshi` stack — deploy from the owner's Windows box with
-      `scripts/deploy-kalshi.ps1`
-- [ ] `08-backups.md` — restic repo + systemd timer
+- [ ] **Router**: confirm UDP 51820 is forwarded to `.50`. Until then WireGuard
+      works on the LAN only. Also check for CGNAT -- if the router's WAN IP is
+      `100.64.x.x`-`100.127.x.x`, port forwarding cannot work and the plan is to
+      swap wg-easy for Tailscale.
+- [ ] WireGuard peers (wg-easy UI, QR codes)
+- [ ] Plex setup wizard, then: Remote Access OFF, LAN Networks
+      `192.168.1.0/24,10.8.0.0/24`, custom access URL `http://192.168.1.50:32400`,
+      hardware transcoding (needs Plex Pass), libraries on `/data/library/*`
+- [ ] Prowlarr indexers -- the owner's choice, do not pick for them
+- [ ] **kalshi** stack -- deploy via `scripts/deploy-kalshi.ps1` from Windows
+- [ ] `08-backups.md` -- restic repo + systemd timer
+- [ ] Optional: 16 GB RAM; Bazarr (behind the `full` profile)
 
 ## Gotchas already hit — fixed, but know why
 
@@ -122,6 +135,16 @@ Next:
 | `sgdisk: command not found` in the storage script | `gdisk` and `parted` are not on a minimal Debian. The script now installs them |
 | DuckDNS cannot do per-subdomain certs | It only writes the ACME TXT at the domain root, so a wildcard cert is mandatory — that is why `Caddyfile.duckdns` is one site block with Host matchers instead of many site blocks |
 | `git pull` refused: local changes | Mode-only diffs (`100644 => 100755`) from the owner's manual `chmod +x`, against an index that predated the exec-bit commit. `git checkout -- scripts/` was safe: zero content changes |
+| Docker pulls die mid-transfer on a `2600:...` address | This ISP's IPv6 path resets and times out. `/etc/gai.conf` fixes the C resolver but **Go ignores gai.conf**, so dockerd kept choosing IPv6. Real fix: `net.ipv6.conf.all.disable_ipv6=1` in `/etc/sysctl.d/99-disable-ipv6.conf`. Same reason to use `ssh -4` |
+| Nextcloud: "Cannot create or write into the data directory" | `/mnt/bulk/nextcloud-data` must be **uid 33 (www-data)**, not PUID 1000. And the image only auto-installs while `/var/www/html` is empty, so restarting never retries -- finish with `occ maintenance:install` |
+| Nextcloud: "Cannot write into config directory", every occ command fails | Caused by re-running `02-storage.sh` while it still did `chown -R /srv/apps` to PUID. The containers do **not** share a uid: html->33, Postgres->70, edge/vpn/ops->root. Fixed in the script |
+| **Drive unplugged while mounted = silent data loss** | The T5 was unplugged mid-session for a cable swap. fstab is `nofail` and nothing remounts on replug, so `/mnt/bulk` reverted to a plain root-fs directory and docker recreated the bind-mount sources there -- Nextcloud wrote 44 MB to the internal SSD. A later `mount -a` then **hid** it rather than moving it. Recovered by stashing, mounting, rsyncing back. `up.sh` now refuses to start cloud/media/download unless `/mnt/bulk` is a real mountpoint. Containers also keep the stale mount until recreated |
+| gluetun + PIA: "VPN provider name is not valid for Wireguard" | gluetun speaks WireGuard to only some providers; **PIA is OpenVPN-only**, which is why `VPN_TYPE` lives in `.env`. PIA credentials are the account login (`p7905962`), not the separately-generated SOCKS pair |
+| Sonarr/Radarr reject the qBittorrent client | "qBittorrent is configured to remove torrents when they reach their Share Ratio Limit" -- set `max_ratio_act` to **0 (pause)**, not 1 (remove), or the torrent vanishes before import |
+| qBittorrent's port never matches PIA's | qBittorrent `depends_on` gluetun being healthy, so gluetun's up-command always fires before qBittorrent exists (exit 4) and the port silently disagrees. `scripts/qbt-port-sync.sh` on a 10-minute timer reconciles it |
+| qBittorrent API login looks like it fails but does not | qBittorrent 5.x names the session cookie `QBT_SID_<port>`, not `SID` |
+| Both *arr apps need `gluetun` as the download-client host | Not `qbittorrent` -- gluetun owns that network namespace, so the container name does not resolve |
+| ddns-updater: "permission denied" on updates.json | It runs as uid 1000, so `/srv/apps/vpn/ddns` must be owned by 1000 |
 
 ## Conventions
 
