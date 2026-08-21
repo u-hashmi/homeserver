@@ -1,0 +1,4 @@
+# Secrets: every stack's real .env. Only the .example files are tracked.
+stacks/*/.env
+!stacks/*/.env.example
+stacks/vpn/ddns-config.json

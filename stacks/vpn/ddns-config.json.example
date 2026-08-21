@@ -1,0 +1,13 @@
+{
+  "settings": [
+    {
+      "provider": "cloudflare",
+      "zone_identifier": "YOUR_CLOUDFLARE_ZONE_ID",
+      "domain": "vpn.home.example.com",
+      "ttl": 60,
+      "token": "CLOUDFLARE_API_TOKEN_WITH_DNS_EDIT",
+      "ip_version": "ipv4",
+      "proxied": false
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+# ops — optional. Uptime Kuma pings every service and can push to your phone;
+# Dozzle is a live log tail for all containers in a browser.
+# Combined ~140 MB. If you stay on 8 GB RAM, this is the stack to skip.
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-America/New_York}
+    volumes:
+      - /srv/apps/ops/uptime-kuma:/app/data
+    networks: [edge]
+
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-America/New_York}
+      - DOZZLE_NO_ANALYTICS=true
+      # Dozzle has no auth of its own; Caddy + WireGuard are the only gate. Read-only
+      # docker socket mount, so it can list and tail but not control anything.
+      - DOZZLE_LEVEL=info
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [edge]
+
+networks:
+  edge:
+    external: true

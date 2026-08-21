@@ -1,0 +1,42 @@
+# kalshi — overrides layered on top of the bot repo's own docker-compose.yml.
+#
+# The repo's compose was written for a dedicated cloud VM: its Caddy grabs host ports
+# 80/443 and fetches its own Let's Encrypt cert. On the home server those ports belong
+# to the edge stack, so here we:
+#
+#   1. drop the published ports  — nothing on the host, only the `edge` network
+#   2. force SITE_ADDRESS=:80    — plain HTTP inside the network; edge Caddy does TLS
+#   3. name it kalshi-caddy      — a stable hostname for edge's reverse_proxy target
+#
+# The repo's Basic Auth stays on. Belt and braces: WireGuard, then TLS, then the login.
+#
+# Usage (from /srv/apps/kalshi/kalshi-flipper):
+#   docker compose -f docker-compose.yml \
+#                  -f /srv/homeserver/stacks/kalshi/docker-compose.override.yml \
+#                  up -d --build
+# Or just run scripts/kalshi.sh, which wraps that.
+
+services:
+  caddy:
+    container_name: kalshi-caddy
+    # Drop the inherited "80:80"/"443:443" — nothing published on the host.
+    # !reset needs Docker Compose >= 2.24.4 (`docker compose version`). On older
+    # compose, comment this out and instead edit the repo's docker-compose.yml.
+    ports: !reset null
+    environment:
+      # Wins over deploy/proxy.env, so you can leave that file alone.
+      - SITE_ADDRESS=:80
+    networks: [edge, default]
+
+  bot-live:
+    # The bot writes SQLite in WAL mode. This path must stay on the internal SSD —
+    # the repo lives at /srv/apps/kalshi/kalshi-flipper, which does.
+    networks: [default]
+
+  bot-paper:
+    networks: [default]
+
+networks:
+  edge:
+    external: true
+  default:

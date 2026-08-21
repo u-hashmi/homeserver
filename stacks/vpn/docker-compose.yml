@@ -1,0 +1,51 @@
+# vpn — inbound remote access. This is the ONLY thing you forward on the router.
+#
+#   wg-easy       WireGuard server + a web UI that hands out QR codes
+#   ddns-updater  keeps vpn.<domain> pointed at your (dynamic) home IP, so client
+#                 configs never need editing when the ISP rotates it
+services:
+  wg-easy:
+    image: ghcr.io/wg-easy/wg-easy:14
+    container_name: wg-easy
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Clients dial this name; ddns-updater below keeps it current.
+      - WG_HOST=${WG_HOST}
+      - PASSWORD_HASH=${WG_UI_PASSWORD_HASH}
+      - WG_PORT=51820
+      - WG_DEFAULT_ADDRESS=10.8.0.x
+      - WG_DEFAULT_DNS=${WG_CLIENT_DNS:-1.1.1.1}
+      # Split tunnel: only home-bound traffic goes through the tunnel. Swap for
+      # 0.0.0.0/0 if you want everything (public Wi-Fi, geo-shifting).
+      - WG_ALLOWED_IPS=${LAN_SUBNET},10.8.0.0/24
+      - WG_PERSISTENT_KEEPALIVE=25
+      - WG_MTU=1380
+      - UI_TRAFFIC_STATS=true
+      - UI_CHART_TYPE=2
+      - LANG=en
+    ports:
+      - "51820:51820/udp"
+      - "51821:51821/tcp"        # UI on the LAN directly, in case Caddy is down
+    volumes:
+      - /srv/apps/vpn/wg-easy:/etc/wireguard
+    cap_add: [NET_ADMIN, SYS_MODULE]
+    sysctls:
+      net.ipv4.ip_forward: "1"
+      net.ipv4.conf.all.src_valid_mark: "1"
+    networks: [edge]
+
+  ddns-updater:
+    image: qmcgaw/ddns-updater
+    container_name: ddns-updater
+    restart: unless-stopped
+    environment:
+      - PERIOD=5m
+      - TZ=${TZ:-America/New_York}
+    volumes:
+      - /srv/apps/vpn/ddns:/updater/data
+    networks: [edge]
+
+networks:
+  edge:
+    external: true

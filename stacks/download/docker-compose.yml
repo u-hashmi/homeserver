@@ -1,0 +1,123 @@
+# download — automation stack. qBittorrent and Prowlarr live INSIDE gluetun's network
+# namespace, so if the VPN tunnel drops they lose all connectivity (that is the
+# killswitch — it is structural, not a setting that can silently fail).
+#
+# Sonarr / Radarr / Bazarr stay on the normal network: they only talk to metadata
+# APIs and to the two containers above.
+#
+# Every container mounts the SAME single root, ${BULK}/media -> /data. That is what
+# makes atomic moves and hardlinks work between /data/downloads and /data/library;
+# mounting them as two separate volumes silently turns every import into a slow
+# full copy that doubles disk use.
+services:
+  gluetun:
+    image: qmcgaw/gluetun:v3
+    container_name: gluetun
+    restart: unless-stopped
+    cap_add: [NET_ADMIN]
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER}
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES:-10.2.0.2/32}
+      - SERVER_COUNTRIES=${SERVER_COUNTRIES}
+      # Ask the provider for an inbound port and refuse to run without one, so
+      # torrents are connectable instead of silently upload-only.
+      - VPN_PORT_FORWARDING=${VPN_PORT_FORWARDING:-on}
+      - PORT_FORWARD_ONLY=on
+      # Hand the forwarded port straight to qBittorrent. Requires "Bypass
+      # authentication for clients on localhost" enabled in the qBittorrent WebUI.
+      - VPN_PORT_FORWARDING_UP_COMMAND=/bin/sh -c 'wget -qO- --post-data "json={\"listen_port\":{{PORTS}},\"random_port\":false,\"upnp\":false}" http://127.0.0.1:8080/api/v2/app/setPreferences'
+      # Let the reverse proxy and the LAN reach the two services inside this netns.
+      - FIREWALL_OUTBOUND_SUBNETS=${EDGE_SUBNET:-172.28.0.0/16},${LAN_SUBNET:-192.168.1.0/24}
+      - DOT=on
+      - TZ=${TZ:-America/New_York}
+      - UPDATER_PERIOD=24h
+    expose:
+      - 8080      # qbittorrent webui
+      - 9696      # prowlarr
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    restart: unless-stopped
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun: { condition: service_healthy }
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/New_York}
+      - WEBUI_PORT=8080
+      - TORRENTING_PORT=6881
+    volumes:
+      - /srv/apps/download/qbittorrent:/config
+      - ${BULK:-/mnt/bulk}/media:/data
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    restart: unless-stopped
+    network_mode: "service:gluetun"    # indexer scraping goes out the VPN too
+    depends_on:
+      gluetun: { condition: service_healthy }
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/New_York}
+    volumes:
+      - /srv/apps/download/prowlarr:/config
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/New_York}
+    volumes:
+      - /srv/apps/download/sonarr:/config
+      - ${BULK:-/mnt/bulk}/media:/data
+    networks: [edge]
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/New_York}
+    volumes:
+      - /srv/apps/download/radarr:/config
+      - ${BULK:-/mnt/bulk}/media:/data
+    networks: [edge]
+
+  # Subtitles. ~250 MB resident — the first thing to drop if you stay on 8 GB RAM.
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    restart: unless-stopped
+    profiles: [full]
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/New_York}
+    volumes:
+      - /srv/apps/download/bazarr:/config
+      - ${BULK:-/mnt/bulk}/media:/data
+    networks: [edge]
+
+networks:
+  edge:
+    external: true

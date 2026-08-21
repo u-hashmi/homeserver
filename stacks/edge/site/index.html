@@ -1,0 +1,73 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>homeserver</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0f1115; --fg:#e6e6e6; --dim:#8b93a1; --card:#171a21; --line:#252a34; }
+  @media (prefers-color-scheme: light) { :root { --bg:#f6f7f9; --fg:#14171c; --dim:#5c6472; --card:#fff; --line:#e3e6ea; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:2.5rem 1.25rem; background:var(--bg); color:var(--fg);
+         font:16px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif; }
+  main { max-width:56rem; margin:0 auto; }
+  h1 { font-size:1.15rem; letter-spacing:.02em; margin:0 0 .25rem; }
+  p.sub { color:var(--dim); margin:0 0 2rem; font-size:.875rem; }
+  h2 { font-size:.75rem; text-transform:uppercase; letter-spacing:.08em; color:var(--dim);
+       margin:2rem 0 .75rem; font-weight:600; }
+  ul { list-style:none; margin:0; padding:0; display:grid; gap:.5rem;
+       grid-template-columns:repeat(auto-fill,minmax(13rem,1fr)); }
+  a { display:block; padding:.7rem .9rem; background:var(--card); border:1px solid var(--line);
+      border-radius:.5rem; color:var(--fg); text-decoration:none; }
+  a:hover { border-color:var(--dim); }
+  a small { display:block; color:var(--dim); font-size:.75rem; }
+</style>
+<main>
+  <h1>homeserver</h1>
+  <p class="sub">M910q &middot; reachable on the LAN or over WireGuard</p>
+
+  <h2>Cloud</h2>
+  <ul>
+    <li><a id="nc">Nextcloud<small>files, notes, calendar, contacts</small></a></li>
+  </ul>
+
+  <h2>Media</h2>
+  <ul>
+    <li><a id="plex">Plex<small>:32400/web &middot; Plexamp</small></a></li>
+    <li><a id="books">Audiobookshelf<small>audiobooks &middot; Prologue</small></a></li>
+  </ul>
+
+  <h2>Trading</h2>
+  <ul>
+    <li><a id="kalshi">Kalshi-Flipper<small>live + paper dashboard</small></a></li>
+  </ul>
+
+  <h2>Downloads</h2>
+  <ul>
+    <li><a id="qbt">qBittorrent<small>behind the VPN</small></a></li>
+    <li><a id="prowlarr">Prowlarr<small>indexers</small></a></li>
+    <li><a id="sonarr">Sonarr<small>tv</small></a></li>
+    <li><a id="radarr">Radarr<small>movies</small></a></li>
+    <li><a id="bazarr">Bazarr<small>subtitles</small></a></li>
+  </ul>
+
+  <h2>Admin</h2>
+  <ul>
+    <li><a id="wg">WireGuard<small>peers &amp; QR codes</small></a></li>
+    <li><a id="status">Uptime Kuma<small>service health</small></a></li>
+    <li><a id="logs">Dozzle<small>container logs</small></a></li>
+    <li><a id="cockpit">Cockpit<small>:9090 &middot; host admin</small></a></li>
+  </ul>
+</main>
+<script>
+  // Every service is a subdomain of the domain this page is served on, so the same
+  // file works for DOMAIN=home.example.com and DOMAIN=home.arpa with no editing.
+  const sub = n => location.protocol + "//" + n + "." + location.hostname;
+  for (const [id, name] of Object.entries({
+    nc: "nextcloud", books: "books", kalshi: "kalshi",
+    qbt: "qbt", prowlarr: "prowlarr", sonarr: "sonarr",
+    radarr: "radarr", bazarr: "bazarr", wg: "wg",
+    status: "status", logs: "logs",
+  })) document.getElementById(id).href = sub(name);
+  // Plex and Cockpit are on host ports, not vhosts — resolve them to this machine.
+  document.getElementById('plex').href = 'http://' + location.hostname + ':32400/web';
+  document.getElementById('cockpit').href = 'https://' + location.hostname + ':9090';
+</script>

@@ -1,0 +1,104 @@
+# No domain? This variant uses Caddy's built-in CA. Certs are valid once you install
+# /srv/apps/edge/caddy-data/caddy/pki/authorities/local/root.crt on each device
+# (Windows: certlm.msc → Trusted Root; iOS: Settings → Profile + Trust).
+#
+# Set DOMAIN=home.arpa in .env and add these to each client's hosts file, or point a
+# local DNS server at them:
+#   192.168.1.50  home.arpa nextcloud.home.arpa books.home.arpa kalshi.home.arpa \
+#                 wg.home.arpa qbt.home.arpa prowlarr.home.arpa sonarr.home.arpa \
+#                 radarr.home.arpa bazarr.home.arpa status.home.arpa logs.home.arpa
+{
+	local_certs
+}
+(sec) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer-when-downgrade"
+		-Server
+	}
+	encode zstd gzip
+	log {
+		output stdout
+		format console
+	}
+}
+
+# ---- landing page ------------------------------------------------------------
+{$DOMAIN} {
+	import sec
+	root * /srv/site
+	file_server
+}
+
+# ---- Nextcloud --------------------------------------------------------------
+nextcloud.{$DOMAIN} {
+	import sec
+	# Service-discovery paths Nextcloud's own setup check complains about otherwise.
+	redir /.well-known/carddav   /remote.php/dav 301
+	redir /.well-known/caldav    /remote.php/dav 301
+	redir /.well-known/webfinger /index.php/.well-known/webfinger 301
+	redir /.well-known/nodeinfo  /index.php/.well-known/nodeinfo 301
+	reverse_proxy nextcloud:80
+}
+
+# ---- Audiobooks (Audiobookshelf; Prologue can use this or Plex) -------------
+books.{$DOMAIN} {
+	import sec
+	reverse_proxy audiobookshelf:80
+}
+
+# ---- Kalshi-Flipper dashboard ----------------------------------------------
+# The bot repo ships its own Caddy that serves the built React dashboard and adds
+# Basic Auth over /api and /ws. We keep it and just terminate TLS out here.
+kalshi.{$DOMAIN} {
+	import sec
+	reverse_proxy kalshi-caddy:80 {
+		# The dashboard holds a long-lived WebSocket on /ws.
+		flush_interval -1
+	}
+}
+
+# ---- WireGuard admin UI ----------------------------------------------------
+wg.{$DOMAIN} {
+	import sec
+	reverse_proxy wg-easy:51821
+}
+
+# ---- download stack --------------------------------------------------------
+# qbittorrent and prowlarr share gluetun's network namespace, so their ports are
+# published by the gluetun container.
+qbt.{$DOMAIN} {
+	import sec
+	reverse_proxy gluetun:8080
+}
+prowlarr.{$DOMAIN} {
+	import sec
+	reverse_proxy gluetun:9696
+}
+sonarr.{$DOMAIN} {
+	import sec
+	reverse_proxy sonarr:8989
+}
+radarr.{$DOMAIN} {
+	import sec
+	reverse_proxy radarr:7878
+}
+bazarr.{$DOMAIN} {
+	import sec
+	reverse_proxy bazarr:6767
+}
+
+# ---- ops (optional stack) --------------------------------------------------
+status.{$DOMAIN} {
+	import sec
+	reverse_proxy uptime-kuma:3001
+}
+logs.{$DOMAIN} {
+	import sec
+	reverse_proxy dozzle:8080
+}
+
+# Plex is deliberately NOT proxied — it runs on the host network and speaks its own
+# TLS on :32400. Proxying it breaks client discovery for no benefit. See
+# docs/06-services.md.

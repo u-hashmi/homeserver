@@ -1,0 +1,47 @@
+# media — Plex (Plexamp / Prologue backend) + Audiobookshelf.
+#
+# Plex runs on the HOST network on purpose:
+#   * GDM/DLNA client discovery needs broadcast traffic a bridge network drops
+#   * it terminates its own TLS on :32400 via *.plex.direct, so a reverse proxy
+#     in front of it adds nothing and breaks more than it fixes
+# Reach it at http://<server>:32400/web over the LAN or the WireGuard tunnel.
+services:
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/New_York}
+      - VERSION=docker
+      - PLEX_CLAIM=${PLEX_CLAIM:-}     # one-shot token from https://plex.tv/claim
+    devices:
+      # Intel HD 530 QuickSync. Hardware transcoding itself needs a Plex Pass;
+      # without one Plex falls back to CPU (the i5-6500T manages ~1 x 1080p).
+      - /dev/dri:/dev/dri
+    volumes:
+      - /srv/apps/media/plex:/config                       # SSD: metadata db + art
+      - ${BULK:-/mnt/bulk}/media/library:/data/library:ro   # USB: read-only library
+      - /dev/shm:/transcode                                # transcode in RAM, not on the SSD
+    tmpfs:
+      - /tmp
+
+  audiobookshelf:
+    image: ghcr.io/advplyr/audiobookshelf:latest
+    container_name: audiobookshelf
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-America/New_York}
+      - PORT=80
+    volumes:
+      - /srv/apps/media/audiobookshelf/config:/config
+      - /srv/apps/media/audiobookshelf/metadata:/metadata
+      - ${BULK:-/mnt/bulk}/media/library/audiobooks:/audiobooks
+      - ${BULK:-/mnt/bulk}/media/library/podcasts:/podcasts
+    networks: [edge]
+
+networks:
+  edge:
+    external: true

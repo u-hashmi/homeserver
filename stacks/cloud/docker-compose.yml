@@ -1,0 +1,105 @@
+# cloud — Nextcloud (files, Notes, calendar, contacts) + Postgres + Redis.
+#
+# Split on purpose:
+#   app code + config + database  →  /srv/apps/cloud   (internal SSD)
+#   user files                    →  /mnt/bulk/...     (1 TB USB)
+# Postgres on the USB bus is how you lose the database. Don't move it.
+services:
+  nextcloud-db:
+    image: postgres:${POSTGRES_TAG:-17-alpine}
+    container_name: nextcloud-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      # Small-box tuning: 8 GB total, Nextcloud is not a data warehouse.
+      - POSTGRES_INITDB_ARGS=--data-checksums
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=768MB
+      -c work_mem=8MB
+      -c maintenance_work_mem=64MB
+      -c max_connections=100
+      -c wal_compression=on
+    volumes:
+      - /srv/apps/cloud/db:/var/lib/postgresql/data
+    networks: [cloudnet]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  nextcloud-redis:
+    image: redis:7-alpine
+    container_name: nextcloud-redis
+    restart: unless-stopped
+    command: redis-server --save "" --appendonly no --maxmemory 128mb --maxmemory-policy allkeys-lru
+    networks: [cloudnet]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 20s
+      timeout: 3s
+      retries: 5
+
+  nextcloud:
+    image: nextcloud:${NEXTCLOUD_TAG:-31-apache}
+    container_name: nextcloud
+    restart: unless-stopped
+    depends_on:
+      nextcloud-db: { condition: service_healthy }
+      nextcloud-redis: { condition: service_healthy }
+    environment:
+      - POSTGRES_HOST=nextcloud-db
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - REDIS_HOST=nextcloud-redis
+      - NEXTCLOUD_ADMIN_USER=${NEXTCLOUD_ADMIN_USER}
+      - NEXTCLOUD_ADMIN_PASSWORD=${NEXTCLOUD_ADMIN_PASSWORD}
+      - NEXTCLOUD_TRUSTED_DOMAINS=nextcloud.${DOMAIN}
+      - NEXTCLOUD_DATA_DIR=/var/www/data
+      # Behind Caddy: generate https URLs and trust the proxy's X-Forwarded-For.
+      - OVERWRITEPROTOCOL=https
+      - OVERWRITEHOST=nextcloud.${DOMAIN}
+      - OVERWRITECLIURL=https://nextcloud.${DOMAIN}
+      - TRUSTED_PROXIES=${EDGE_SUBNET:-172.28.0.0/16}
+      - APACHE_DISABLE_REWRITE_IP=1
+      - PHP_MEMORY_LIMIT=768M
+      - PHP_UPLOAD_LIMIT=16G
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_NAME=${SMTP_NAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-}
+      - MAIL_DOMAIN=${MAIL_DOMAIN:-}
+    volumes:
+      - /srv/apps/cloud/html:/var/www/html          # SSD: code + config + apps
+      - ${BULK:-/mnt/bulk}/nextcloud-data:/var/www/data   # USB: user files
+    networks: [edge, cloudnet]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/status.php | grep -q '\"installed\":true'"]
+      interval: 60s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+
+  nextcloud-cron:
+    image: nextcloud:${NEXTCLOUD_TAG:-31-apache}
+    container_name: nextcloud-cron
+    restart: unless-stopped
+    entrypoint: /cron.sh
+    depends_on:
+      nextcloud-db: { condition: service_healthy }
+    volumes:
+      - /srv/apps/cloud/html:/var/www/html
+      - ${BULK:-/mnt/bulk}/nextcloud-data:/var/www/data
+    networks: [cloudnet]
+
+networks:
+  edge:
+    external: true
+  cloudnet:
+    driver: bridge

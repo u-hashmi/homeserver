@@ -1,0 +1,34 @@
+# edge — the single HTTPS front door for every web UI on the box.
+#
+# TLS modes (set CADDYFILE in .env):
+#   Caddyfile           real Let's Encrypt certs via Cloudflare DNS-01. Your domain's
+#                       A records point at the server's PRIVATE LAN IP, so the certs
+#                       are valid everywhere and nothing is exposed. Recommended.
+#   Caddyfile.internal  Caddy's own CA. No domain needed; you install its root cert
+#                       on each device once, or click through the warning.
+services:
+  caddy:
+    build: .
+    image: homeserver/caddy:cloudflare
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"       # HTTP/3
+    env_file: .env
+    volumes:
+      - ./${CADDYFILE:-Caddyfile}:/etc/caddy/Caddyfile:ro
+      - ./site:/srv/site:ro
+      - /srv/apps/edge/caddy-data:/data      # certs live here — back this up
+      - /srv/apps/edge/caddy-config:/config
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  edge:
+    external: true
