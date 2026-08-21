@@ -91,7 +91,10 @@ echo "==> never sleep; this is a server"
 sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 
 echo "==> smart monitoring"
-sudo systemctl enable --now smartd || true
+# The real unit is smartmontools.service; smartd.service is a symlink alias, and
+# systemd refuses to 'enable' a linked name. The package already enables it on
+# install, so this is belt-and-braces.
+sudo systemctl enable --now smartmontools.service || true
 sudo sensors-detect --auto >/dev/null 2>&1 || true
 
 echo "==> done. free -h:"
