@@ -163,6 +163,7 @@ Next:
 | Transferring the bot repo hangs for many minutes | The working tree carries gigabytes of untracked Parquet tick archives -- `du` on it times out. Do not tar the directory. `git archive --format=tar HEAD` emits only tracked files (1.1 MB) by construction, then `scp` the five git-ignored secret files separately. `deploy-kalshi.ps1` also pipes gzip through a PowerShell pipeline, which re-encodes bytes as text and corrupts the stream -- run the transfer from Git Bash instead |
 | Plex link on the landing page fails with `PR_END_OF_FILE_ERROR` | **HSTS is scoped to the host, not the port.** After the browser sees `Strict-Transport-Security` for the domain it force-upgrades every `http://` URL on that host, including `:32400`, where Plex answers plain HTTP. Link Plex and Cockpit by **IP literal**, which the policy does not cover |
 | Sonarr/Radarr cannot reach Plex: "Http request timed out" | Plex is `network_mode: host`; containers reach it from `172.28.x.x`, which neither the LAN nor WireGuard ufw rule covered. Fixed in `05-firewall.sh` |
+| Kalshi dashboard always 401s; caddy logs `bcrypt: hashedSecret too short` | **Docker Compose v5 interpolates `env_file` values.** The bcrypt hash `$2a$14$Ryh...` had `$Ryh...` read as an undefined variable and blanked, leaving just `$2a$14$` (7 bytes). Double every `$` in `deploy/proxy.env` -> `$$2a$$14$$...`. The bot repo's README says env_file values are literal; that was true of older Compose. It fails by silently truncating a secret, not by erroring |
 
 ## Conventions
 

@@ -9,7 +9,7 @@ wants host ports 80/443, which belong to the `edge` stack here.
 
 | Override | Effect |
 |---|---|
-| `ports: !override []` | Nothing published on the host; reachable only on the `edge` network |
+| `ports: !reset null` | Nothing published on the host; reachable only on the `edge` network |
 | `SITE_ADDRESS=:80` | Plain HTTP inside the network — edge Caddy terminates TLS |
 | `container_name: kalshi-caddy` | Stable hostname for edge's `reverse_proxy` target |
 
@@ -59,6 +59,22 @@ docker run --rm caddy:2-alpine caddy hash-password --plaintext 'YOUR_PASSWORD'
 
 `SITE_ADDRESS` in `proxy.env` no longer matters — the override forces `:80`.
 
+> **Double every `$` in `BASIC_AUTH_HASH`.** Docker Compose v5 interpolates
+> `env_file` values, so a raw bcrypt hash like `$2a$14$Ryh...` gets `$Ryh...`
+> treated as an undefined variable and blanked, leaving `$2a$14$` — and Caddy
+> then rejects every login with `bcrypt: hashedSecret too short`. Write it as
+> `$$2a$$14$$Ryh...`. This fails silently by truncating the secret, so the only
+> symptom is a permanent 401.
+>
+> Forgotten the password? Bcrypt is one-way — it cannot be recovered, only reset:
+>
+> ```bash
+> PW=$(openssl rand -base64 15 | tr -d '/+=' | cut -c1-16); echo "$PW"
+> docker run --rm caddy:2-alpine caddy hash-password --plaintext "$PW"
+> # put the hash in deploy/proxy.env with every $ doubled, then:
+> docker compose ... up -d --force-recreate caddy
+> ```
+
 ### 2. Ship it
 
 From Windows, in `D:\AI\HomeServer`:
@@ -67,10 +83,24 @@ From Windows, in `D:\AI\HomeServer`:
 .\scripts\deploy-kalshi.ps1 -ServerHost 192.168.1.50 -User hash
 ```
 
-That preflights the secrets, streams the source over SSH with `tar` (both ship with
-Windows — no rsync needed), and runs the build on the server. Excluded from the
-transfer: `.git`, `node_modules`, `web/dist`, `*.exe`, and **`data/`** — the server
-keeps its own SQLite, and shipping yours would clobber live trade history.
+It preflights the secrets (including the two traps below), collects the source with
+**`git archive`**, uploads it, fixes ownership, and builds on the server.
+
+Why `git archive` rather than `tar`: the working tree carries gigabytes of untracked
+Parquet tick archives — `du` on it times out, let alone a tar. `git archive HEAD`
+emits exactly the tracked files (~1 MB) by construction, so `data/` and the `.exe`
+builds are excluded without a guessed exclude list. The server keeps its own SQLite;
+shipping yours would clobber live trade history.
+
+It also writes a temp file and `scp`s it instead of piping tar, because PowerShell
+re-encodes bytes as text between native commands and corrupts a gzip stream.
+
+**Ownership matters.** The image runs as **uid 10001 (`app`)**:
+
+| Path | Owner | Mode | Why |
+|---|---|---|---|
+| `data/` | `10001:10001` | 755 | Must be writable, or SQLite fails with `unable to open database file: out of memory (14)` — error 14 is `CANTOPEN`, not OOM |
+| `keys/`, `deploy/` | `<you>:10001` | 750 / 640 | Container reads via group; you keep ownership so `kalshi.sh`'s preflight still works. `chmod 700` here locks out the script itself |
 
 Re-run the same command for every subsequent deploy. It is idempotent and the
 database persists.
