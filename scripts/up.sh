@@ -11,7 +11,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ACTION="${ACTION:-up}"
-ALL=(edge vpn cloud media download ops)
+ALL=(edge vpn cloud media download manga ops)
 STACKS=("$@")
 [[ ${#STACKS[@]} -eq 0 ]] && STACKS=("${ALL[@]}")
 
@@ -24,7 +24,7 @@ docker network inspect edge >/dev/null 2>&1 || {
 # later `mount -a` HIDES that data rather than moving it. Learned the hard way after
 # the drive was unplugged mid-session for a cable swap.
 BULK_MNT="${BULK:-/mnt/bulk}"
-needs_bulk() { case "$1" in cloud|media|download) return 0;; *) return 1;; esac; }
+needs_bulk() { case "$1" in cloud|media|download|manga) return 0;; *) return 1;; esac; }
 for s in "${STACKS[@]}"; do
   if needs_bulk "$s" && ! mountpoint -q "$BULK_MNT"; then
     echo "!! $BULK_MNT is NOT mounted, and stack '$s' stores data there."

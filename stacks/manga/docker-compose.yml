@@ -1,0 +1,64 @@
+# manga — Suwayomi (auto-download) + Komga (serve via OPDS).
+#
+# This is a SEPARATE pipeline from the *arr stack, not an extension of it. Manga
+# barely exists on torrent trackers, so Suwayomi scrapes manga sites directly using
+# Tachiyomi extensions. Prowlarr, qBittorrent and PIA are not involved.
+#
+#   Suwayomi  tracks series, auto-downloads new chapters, AND reads them ──▶ /manga
+#   Komga     optional (profile `komga`): same folder, adds OPDS for native iOS apps
+#
+# Suwayomi alone is ~500 MB; Komga adds ~400 MB. Both are JVM apps, so on an 8 GB box
+# running both alongside a Plex transcode is tight -- see docs/00-hardware.md.
+# Suwayomi's web UI has a real reader (page nav, reading direction, per-chapter
+# progress) and installs to the iPhone home screen as a PWA, which is why Komga is
+# off by default.
+services:
+  suwayomi:
+    image: ghcr.io/suwayomi/suwayomi-server:stable
+    container_name: suwayomi
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-America/New_York}
+      # Downloads land in the shared library folder so Komga sees them, and are
+      # written as CBZ (one file per chapter) rather than loose image folders --
+      # Komga handles CBZ far better. Verify in Settings -> Downloads if a future
+      # image ignores these.
+      - DOWNLOAD_AS_CBZ=true
+      - AUTO_DOWNLOAD_NEW_CHAPTERS=true
+      - EXTENSION_REPOS=[]
+      # Suwayomi runs as this uid; the library dir must be writable by it.
+      - BIND_PORT=4567
+    volumes:
+      - /srv/apps/manga/suwayomi:/home/suwayomi/.local/share/Tachidesk
+      - ${BULK:-/mnt/bulk}/media/library/manga:/home/suwayomi/.local/share/Tachidesk/downloads
+    networks: [edge]
+    # Optional: route its scraping through PIA like the torrent traffic, by sharing
+    # gluetun's network namespace instead of joining `edge`. Deliberately NOT the
+    # default -- it couples this stack to the download stack's lifecycle, and if
+    # gluetun restarts, Suwayomi silently loses networking until it is recreated.
+    #   network_mode: "container:gluetun"
+
+  # Not started by default. Suwayomi's own web UI is a perfectly good reader with
+  # progress tracking, so Komga only earns its ~400 MB if you want a NATIVE iOS app
+  # (Panels, ~$10) which needs OPDS. Enable with:
+  #   docker compose --profile komga up -d
+  komga:
+    image: gotson/komga:latest
+    container_name: komga
+    profiles: [komga]
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-America/New_York}
+      - KOMGA_LIBRARIES_SCAN_STARTUP=true
+      # Komga watches the filesystem, so a chapter Suwayomi finishes appears without
+      # waiting for a scheduled scan.
+      - KOMGA_LIBRARIES_SCAN_DIRECTORY_EXCLUSIONS=#recycle,@eaDir,.@__thumb
+    user: "${PUID:-1000}:${PGID:-1000}"
+    volumes:
+      - /srv/apps/manga/komga:/config
+      - ${BULK:-/mnt/bulk}/media/library/manga:/data/manga
+    networks: [edge]
+
+networks:
+  edge:
+    external: true

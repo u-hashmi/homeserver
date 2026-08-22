@@ -205,7 +205,22 @@ Next:
       have the indexers, qBittorrent as client, root folders, Plex notification on
       import, and Plex-friendly rename formats. Adding a movie is now fully
       automatic through to the Plex library.
-- [ ] Optional: 16 GB RAM; Bazarr (behind the `full` profile)
+- [x] **manga** stack: Suwayomi at `manga.<domain>` (~250 MB in practice, lighter than
+      expected). Komga is in the same compose behind a `komga` profile, off by default
+      -- Suwayomi's own web UI is a real reader and installs as an iOS PWA, so Komga
+      only earns its RAM if the owner buys Panels (~$10) for a native app. Suwayomi
+      ships with NO sources; extension repos are added by hand and are the owner's
+      choice, same as indexers.
+- [x] ntfy alerts (`scripts/alerts.sh`, 30-min timer): disk >80%, `/mnt/bulk`
+      unmounted, VPN leak/drop, dead containers, stale backups. Notifies only on
+      state changes. Topic is in `/etc/homeserver-alerts.conf` (600), never committed.
+- [x] `watchlist-refresh.sh` (20-min timer) forces the Plex Watchlist re-read.
+      **Both** Plex list types report `minRefreshInterval 06:00:00` -- the RSS variant
+      is NOT faster, so switching list types does not help. Deleting and recreating
+      the list is the only thing that clears the stored refresh timestamp.
+- [ ] Optional: 16 GB RAM; Bazarr (behind the `full` profile); Komga (`--profile komga`)
+- [ ] **No audiobook automation exists.** Readarr is retired; Plex Watchlist is
+      movies/TV only. Manual drops into `/mnt/bulk/media/library/audiobooks`.
 
 ## Gotchas already hit — fixed, but know why
 

@@ -159,6 +159,60 @@ Prologue plus Plex, delete the `audiobookshelf` service to reclaim about 200 MB.
 
 ---
 
+## manga — Suwayomi
+
+```bash
+cp stacks/manga/.env.example stacks/manga/.env
+./scripts/up.sh manga
+```
+
+`https://manga.<domain>` — and on iOS, Safari → Share → **Add to Home Screen**. It runs
+as a standalone PWA with a real reader: page navigation, reading direction, per-chapter
+progress.
+
+**A separate pipeline from the *arr stack, not an extension of it.** Manga barely
+exists on torrent trackers, so Suwayomi scrapes manga sites directly using Tachiyomi
+extensions. Prowlarr, qBittorrent and PIA are not involved.
+
+**It ships with no sources.** Tachiyomi was discontinued, so extension repositories
+must be added by hand: Settings → Browse → Extension repositories, then install the
+sources you want. Which repo and which sources is the owner's call — do not pick.
+
+Settings worth confirming in the UI (the compose sets them as env defaults, but the
+UI is authoritative):
+
+| Setting | Value | Why |
+|---|---|---|
+| Save as CBZ | on | One file per chapter. Loose image folders are worse for every reader, and for Komga if you add it later |
+| Auto-download new chapters | on | The point of the exercise |
+| Download location | default | Already bind-mounted to `/mnt/bulk/media/library/manga` |
+
+### Komga is optional, and off
+
+Komga is defined in the same compose file behind a `komga` profile. It reads the same
+folder and adds **OPDS**, which is what native iOS readers need:
+
+```bash
+docker compose -f stacks/manga/docker-compose.yml --project-directory stacks/manga   -p manga --profile komga up -d
+```
+
+Only worth its ~400 MB if you want a native app. On iOS that means **Panels** (~$10,
+App Store) — the free alternatives (Paperback, Aidoku) are sideload-only and need
+re-signing every 7 days without a paid Apple developer account. Suwayomi's own web
+reader is free and genuinely good, which is why Komga is off by default. Its Caddy
+vhost (`komga.<domain>`) is already configured, so enabling it needs no proxy change.
+
+### Audiobooks have no equivalent
+
+There is no wishlist-to-download path for audiobooks. Plex Watchlist only covers
+movies and TV, and **Readarr — the *arr for books — was retired** over unfixable
+metadata problems. Chaptarr is an early-stage replacement; LazyLibrarian works but is
+rough. For now audiobooks are a manual drop into
+`/mnt/bulk/media/library/audiobooks/Author/Book Title/`, which Audiobookshelf picks up
+on its next scan.
+
+---
+
 ## download — VPN killswitch
 
 ```bash

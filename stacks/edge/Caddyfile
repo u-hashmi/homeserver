@@ -88,6 +88,18 @@
 		reverse_proxy bazarr:6767
 	}
 
+	# ---- manga -------------------------------------------------------------
+	# Suwayomi downloads; Komga serves the same folder and exposes OPDS at
+	# /opds/v1.2/catalog for Paperback / Panels on iOS.
+	@manga host manga.{$DOMAIN}
+	handle @manga {
+		reverse_proxy suwayomi:4567
+	}
+	@komga host komga.{$DOMAIN}
+	handle @komga {
+		reverse_proxy komga:25600
+	}
+
 	# ---- Cockpit (host admin) ----------------------------------------------
 	# Cockpit runs on the HOST, not in a container, so it is reached at the LAN IP.
 	# Its own self-signed cert only carried SAN 127.0.0.1/localhost, which made
