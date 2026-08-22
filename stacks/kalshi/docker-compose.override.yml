@@ -31,9 +31,21 @@ services:
   bot-live:
     # The bot writes SQLite in WAL mode. This path must stay on the internal SSD —
     # the repo lives at /srv/apps/kalshi/kalshi-flipper, which does.
+    #
+    # TZ is NOT optional. The catcher's off-peak logic uses nowLocal.Hour()
+    # (application/dart/catcher.go), and the night window is documented as LOCAL
+    # time: [NightStartHour, NightEndHour). The repo's compose sets no TZ, so the
+    # container runs in UTC and the window silently shifts by the UTC offset --
+    # with night_start=23 that means the bot throttles to offpeak_budget from
+    # 19:00 Eastern and runs the full budget from 03:00-07:00 Eastern. Weekend
+    # detection is local too, so Saturday/Sunday boundaries shift as well.
+    environment:
+      - TZ=America/New_York
     networks: [default]
 
   bot-paper:
+    environment:
+      - TZ=America/New_York
     networks: [default]
 
 networks:
