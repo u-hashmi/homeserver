@@ -159,57 +159,35 @@ Prologue plus Plex, delete the `audiobookshelf` service to reclaim about 200 MB.
 
 ---
 
-## manga — Suwayomi
+## Manga and audiobooks: no automation exists, and why
 
-```bash
-cp stacks/manga/.env.example stacks/manga/.env
-./scripts/up.sh manga
-```
+Both were tried and removed. Neither has a working equivalent of the Plex
+Watchlist -> Radarr -> qBittorrent -> Plex pipeline, for different reasons.
 
-`https://manga.<domain>` — and on iOS, Safari → Share → **Add to Home Screen**. It runs
-as a standalone PWA with a real reader: page navigation, reading direction, per-chapter
-progress.
+**Manga.** Suwayomi was deployed and then removed. It is a client framework that
+ships with **zero sources** -- and critically, Suwayomi's *own* extension
+repository (`raw.githubusercontent.com/suwayomi/tachiyomi-extension/repo/index.min.json`)
+contains exactly **one** extension, their Tachidesk bridge, which is not a manga
+source at all. Searching it throws
+`IndexOutOfBoundsException: Empty list doesn't contain element at index 0`.
 
-**A separate pipeline from the *arr stack, not an extension of it.** Manga barely
-exists on torrent trackers, so Suwayomi scrapes manga sites directly using Tachiyomi
-extensions. Prowlarr, qBittorrent and PIA are not involved.
+Every real manga source extension lives only in third-party community repos,
+because Tachiyomi's official extension repository was taken down. Those repos
+exist mainly to index aggregator sites, so choosing one is the owner's call.
 
-**It ships with no sources.** Tachiyomi was discontinued, so extension repositories
-must be added by hand: Settings → Browse → Extension repositories, then install the
-sources you want. Which repo and which sources is the owner's call — do not pick.
+For legal reading, the official free iOS apps are better than this stack anyway:
+**MANGA Plus** (Shueisha, current Shonen Jump chapters free), **Comikey**,
+**Webtoon**, **Tapas**. No server involved.
 
-Settings worth confirming in the UI (the compose sets them as env defaults, but the
-UI is authoritative):
+If revisited: Suwayomi's `Local source` reads CBZ files dropped into a folder and
+syncs reading progress across devices, which is genuinely useful for DRM-free
+volumes. That works with no extensions at all.
 
-| Setting | Value | Why |
-|---|---|---|
-| Save as CBZ | on | One file per chapter. Loose image folders are worse for every reader, and for Komga if you add it later |
-| Auto-download new chapters | on | The point of the exercise |
-| Download location | default | Already bind-mounted to `/mnt/bulk/media/library/manga` |
-
-### Komga is optional, and off
-
-Komga is defined in the same compose file behind a `komga` profile. It reads the same
-folder and adds **OPDS**, which is what native iOS readers need:
-
-```bash
-docker compose -f stacks/manga/docker-compose.yml --project-directory stacks/manga   -p manga --profile komga up -d
-```
-
-Only worth its ~400 MB if you want a native app. On iOS that means **Panels** (~$10,
-App Store) — the free alternatives (Paperback, Aidoku) are sideload-only and need
-re-signing every 7 days without a paid Apple developer account. Suwayomi's own web
-reader is free and genuinely good, which is why Komga is off by default. Its Caddy
-vhost (`komga.<domain>`) is already configured, so enabling it needs no proxy change.
-
-### Audiobooks have no equivalent
-
-There is no wishlist-to-download path for audiobooks. Plex Watchlist only covers
-movies and TV, and **Readarr — the *arr for books — was retired** over unfixable
-metadata problems. Chaptarr is an early-stage replacement; LazyLibrarian works but is
-rough. For now audiobooks are a manual drop into
-`/mnt/bulk/media/library/audiobooks/Author/Book Title/`, which Audiobookshelf picks up
-on its next scan.
+**Audiobooks.** No wishlist path exists. Plex Watchlist covers only movies and TV,
+and **Readarr -- the *arr for books -- was retired** over unfixable metadata
+problems. Chaptarr is an early-stage replacement; LazyLibrarian works but is rough.
+For now: drop files into `/mnt/bulk/media/library/audiobooks/Author/Book Title/`
+and Audiobookshelf picks them up on its next scan.
 
 ---
 

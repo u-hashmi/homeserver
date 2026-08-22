@@ -205,12 +205,6 @@ Next:
       have the indexers, qBittorrent as client, root folders, Plex notification on
       import, and Plex-friendly rename formats. Adding a movie is now fully
       automatic through to the Plex library.
-- [x] **manga** stack: Suwayomi at `manga.<domain>` (~250 MB in practice, lighter than
-      expected). Komga is in the same compose behind a `komga` profile, off by default
-      -- Suwayomi's own web UI is a real reader and installs as an iOS PWA, so Komga
-      only earns its RAM if the owner buys Panels (~$10) for a native app. Suwayomi
-      ships with NO sources; extension repos are added by hand and are the owner's
-      choice, same as indexers.
 - [x] ntfy alerts (`scripts/alerts.sh`, 30-min timer): disk >80%, `/mnt/bulk`
       unmounted, VPN leak/drop, dead containers, stale backups. Notifies only on
       state changes. Topic is in `/etc/homeserver-alerts.conf` (600), never committed.
@@ -218,9 +212,12 @@ Next:
       **Both** Plex list types report `minRefreshInterval 06:00:00` -- the RSS variant
       is NOT faster, so switching list types does not help. Deleting and recreating
       the list is the only thing that clears the stored refresh timestamp.
-- [ ] Optional: 16 GB RAM; Bazarr (behind the `full` profile); Komga (`--profile komga`)
-- [ ] **No audiobook automation exists.** Readarr is retired; Plex Watchlist is
-      movies/TV only. Manual drops into `/mnt/bulk/media/library/audiobooks`.
+- [ ] Optional: 16 GB RAM; Bazarr (behind the `full` profile)
+- [x] **Manga and audiobooks: no automation exists.** Suwayomi was deployed and
+      REMOVED -- see the section below. Audiobooks have no path at all: Readarr is
+      retired and Plex Watchlist covers only movies and TV. Both are manual drops
+      into `/mnt/bulk/media/library/{audiobooks,...}`. Do not rebuild either without
+      a new explicit request.
 
 ## Gotchas already hit — fixed, but know why
 
@@ -277,6 +274,30 @@ Next:
   owner's global identity is a work address — do not let it into commits here.
 - The download stack is general-purpose automation. Do not add indexers or content
   suggestions; that is the owner's call.
+
+## Manga: deployed Suwayomi, removed it
+
+Tried and reverted, so the containers, images, Caddy vhosts, `stacks/manga` and the
+empty library folder are all gone. Do not rebuild without a new request.
+
+Why it does not work: Suwayomi ships with **zero sources**, and Suwayomi's *own*
+extension repo -- `raw.githubusercontent.com/suwayomi/tachiyomi-extension/repo/index.min.json`
+-- is 297 bytes containing exactly **one** extension, their `tachidesk` bridge. That
+bridge expects a REMOTE Suwayomi server; searching it with none configured throws
+`IndexOutOfBoundsException: Empty list doesn't contain element at index 0`, which is
+what the owner hit. I had wrongly assumed the official repo carried the real source
+extensions; it does not.
+
+All actual manga sources live only in third-party community repos (Tachiyomi's
+official one was taken down), and those exist mainly to index aggregator sites --
+the owner's call, not ours, same convention as Prowlarr indexers.
+
+For legal manga the official free iOS apps beat this stack outright: **MANGA Plus**
+(Shueisha, current Shonen Jump free), Comikey, Webtoon, Tapas.
+
+One quirk worth knowing if it is ever revisited: `profiles: [komga]` did **not**
+prevent Compose v5 from starting the komga service on `up -d` -- it came up anyway
+and had to be removed by hand.
 
 ## Media stack: evaluated a debrid rebuild, decided against it
 
