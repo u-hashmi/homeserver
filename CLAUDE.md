@@ -78,6 +78,12 @@ transcode needs. There is **no HEVC encode**.
   - `vpn.coder-geist.com` -> public IP, kept current by `ddns-updater`
   - The Cloudflare token is **account-owned**, so it 401s at `/user/tokens/verify`
     and must use `/accounts/<id>/tokens/verify`.
+- **WireGuard runs on UDP 49683, not 51820.** Spectrum's app assigned that port
+  when the forward was created, and `WG_PORT` is both the listen port and the port
+  baked into client configs -- so it must match the router. `WG_PORT` is now in
+  `stacks/vpn/.env`. Changing it requires re-downloading every peer config.
+- Router WAN IP is a real public address (`66.168.9.180`), so **this line is not
+  behind CGNAT** and port forwarding works. Tailscale is not needed.
 - Public IP moves: `173.40.32.72` then `66.168.9.180` within one evening. That is
   why `ddns-updater` exists. ISP is **Spectrum**; the router is a Sagemcom managed
   through the **My Spectrum app** (Services -> Router -> Advanced Settings ->
@@ -214,6 +220,11 @@ Next:
 | Importing the local bot DB | Never copy `flipper.db` alone -- a 4 MB `-wal` sat beside it and would have been lost. Stop the bots, back up the server copy, `scp` **db + -wal + -shm together**, `chown 10001:10001`, then `pragma integrity_check` and `wal_checkpoint(TRUNCATE)` before restarting. Imported 56,773 opportunities and 2,085 orders this way |
 | Bot ran in **night mode at 7pm Eastern** | The bot's compose sets **no `TZ`**, so the container ran in UTC while `application/dart/catcher.go` evaluates the off-peak window with `nowLocal.Hour()` -- documented as LOCAL time. With `night_start=23` the throttle to `offpeak_budget` began at 19:00 Eastern and the full budget ran 03:00-07:00 Eastern. Weekend detection is local too, so those boundaries shifted as well. Fixed with `TZ=America/New_York` in the override. **This is a latent bug in the bot repo for any UTC host, including the Oracle/Azure deploys** |
 | Plex Watchlist additions take hours to reach Radarr | Radarr enforces a per-list **minimum refresh interval** (~6 h for `PlexImport`) and silently skips the fetch inside it -- `ImportListSync` firing every 5 minutes changes nothing. Measured: last real fetch 18:14, still none by 21:48. Workaround is deleting and recreating the list, which resets the timer. The proper fix is the **`PlexRssImport`** list type using the RSS URL from app.plex.tv/desktop/#!/settings/watchlist, which refreshes on the normal RSS cadence |
+| WireGuard tunnel shows "on" but nothing loads on cellular | The app reports the tunnel up as soon as the local interface exists -- WireGuard is connectionless, so a green toggle proves nothing. Check `docker exec wg-easy wg show`: **no `endpoint` / `latest handshake` line means no packet ever arrived.** In the client, bytes sent climb while received stays 0 |
+| ...and it appeared to work on Wi-Fi | Red herring. `WG_ALLOWED_IPS` is split-tunnel (`192.168.1.0/24,10.8.0.0/24`), so at home the phone is already on that subnet and reaches everything over the LAN without using the tunnel at all. Only cellular actually exercises it |
+| The forwarded port was 49683, not 51820 | Spectrum's app picked its own external port. `WG_PORT` must equal the forwarded port because it is written into client configs as well as being the listen port. Peers must be re-downloaded after changing it |
+| Cockpit unreachable in the browser, `gnutls_handshake failed` in its log | Cockpit's self-signed cert had SAN `127.0.0.1`/`localhost` only, so `https://<lan-ip>:9090` matched nothing and browsers hard-failed it (`sscg` missing, so it fell back to bare OpenSSL). Fixed by proxying it through Caddy at `cockpit.<domain>` with `AllowUnencrypted`, `Origins` and `ProtocolHeader` in `/etc/cockpit/cockpit.conf`, plus a ufw rule for the docker bridge |
+| Caddy kept dialling the OLD LAN IP after the static-IP change | **`docker restart` does not re-read `env_file`.** `LAN_IP` was still `192.168.1.198` inside the container, so the Cockpit proxy 502'd. Use `up -d --force-recreate` after editing a stack's `.env` |
 
 ## Conventions
 

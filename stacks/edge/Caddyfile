@@ -88,6 +88,20 @@
 		reverse_proxy bazarr:6767
 	}
 
+	# ---- Cockpit (host admin) ----------------------------------------------
+	# Cockpit runs on the HOST, not in a container, so it is reached at the LAN IP.
+	# Its own self-signed cert only carried SAN 127.0.0.1/localhost, which made
+	# browsers hard-fail https://<lan-ip>:9090 with a TLS alert -- so it is proxied
+	# here instead and inherits the real wildcard cert. Cockpit needs
+	# Origins + ProtocolHeader set in /etc/cockpit/cockpit.conf to accept this.
+	@cockpit host cockpit.{$DOMAIN}
+	handle @cockpit {
+		reverse_proxy {$LAN_IP}:9090 {
+			# Cockpit is websocket-heavy; do not buffer it.
+			flush_interval -1
+		}
+	}
+
 	# ---- ops ---------------------------------------------------------------
 	@status host status.{$DOMAIN}
 	handle @status {

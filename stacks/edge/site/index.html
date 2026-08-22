@@ -54,7 +54,7 @@
     <li><a id="wg">WireGuard<small>peers &amp; QR codes</small></a></li>
     <li><a id="status">Uptime Kuma<small>service health</small></a></li>
     <li><a id="logs">Dozzle<small>container logs</small></a></li>
-    <li><a id="cockpit">Cockpit<small>:9090 &middot; host admin</small></a></li>
+    <li><a id="cockpit">Cockpit<small>host admin</small></a></li>
   </ul>
 </main>
 <script>
@@ -78,5 +78,5 @@
   })) document.getElementById(id).href = sub(name);
 
   document.getElementById("plex").href = "http://" + LAN_IP + ":32400/web";
-  document.getElementById("cockpit").href = "https://" + LAN_IP + ":9090";
+  document.getElementById("cockpit").href = sub("cockpit");
 </script>

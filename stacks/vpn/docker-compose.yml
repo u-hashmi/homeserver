@@ -13,7 +13,10 @@ services:
       # Clients dial this name; ddns-updater below keeps it current.
       - WG_HOST=${WG_HOST}
       - PASSWORD_HASH=${WG_UI_PASSWORD_HASH}
-      - WG_PORT=51820
+      # WG_PORT is BOTH the container's listen port and the port written into
+      # client configs, so it must match what the router forwards. Spectrum's app
+      # assigned 49683 rather than the conventional 51820.
+      - WG_PORT=${WG_PORT:-51820}
       - WG_DEFAULT_ADDRESS=10.8.0.x
       - WG_DEFAULT_DNS=${WG_CLIENT_DNS:-1.1.1.1}
       # Split tunnel: only home-bound traffic goes through the tunnel. Swap for
@@ -25,7 +28,7 @@ services:
       - UI_CHART_TYPE=2
       - LANG=en
     ports:
-      - "51820:51820/udp"
+      - "${WG_PORT:-51820}:${WG_PORT:-51820}/udp"
       - "51821:51821/tcp"        # UI on the LAN directly, in case Caddy is down
     volumes:
       - /srv/apps/vpn/wg-easy:/etc/wireguard
