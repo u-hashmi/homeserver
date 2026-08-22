@@ -100,8 +100,23 @@ transcode needs. There is **no HEVC encode**.
 
 - **Debian 13 bare metal**, not Windows and not Proxmox. Idle RAM and native
   `/dev/dri` passthrough for Plex decided it.
-- **WireGuard-only ingress.** One forwarded port (51820/udp). Nothing else is exposed,
-  which is why the web UIs are not internet-hardened. Plex Remote Access stays OFF.
+- **Remote access is Tailscale, NOT WireGuard.** This reverses the original decision.
+  wg-easy is still installed and works on the LAN, but it never functioned remotely:
+  the router would not forward a packet. Proven with a 3-minute `tcpdump` on
+  `enp0s31f6` for all inbound UDP -- the only traffic was PIA's tunnel, zero packets
+  to 49683 or 51820 from anywhere. Spectrum's app also cycled the external port on
+  each edit, so no static `Endpoint` could ever match.
+  Tailscale connects **outward**, so the router is irrelevant. It runs on the HOST
+  (not a container), advertises `192.168.1.0/24` as an approved subnet route, and
+  every existing URL keeps working unchanged because they resolve to `192.168.1.50`
+  and that subnet is routed.
+  - Server: `100.120.6.37`, hostname `homeserver`, MagicDNS `homeserver.taildc08dd.ts.net`
+  - **Do NOT repoint DNS at the Tailscale IP.** The Roku cannot run Tailscale, so it
+    can only reach `192.168.1.50`. LAN IP + subnet route is what makes both work.
+  - `tailscale-gro.service` applies the `ethtool` UDP-GRO tuning Tailscale asks for on
+    a subnet router, persistently.
+  - Nothing is exposed to the internet, which is still why the web UIs are not
+    internet-hardened. Plex Remote Access stays OFF.
 - **No Tor.** The owner originally asked for it. WireGuard covers remote access, and
   torrenting over Tor is unusably slow and harmful to that network. The download path
   uses a commercial VPN (gluetun) instead. This was discussed and settled.
@@ -153,11 +168,16 @@ Credentials issued (all in git-ignored `.env` files, mode 600):
 
 Next:
 
-- [ ] **Router**: confirm UDP 51820 is forwarded to `.50`. Until then WireGuard
-      works on the LAN only. Also check for CGNAT -- if the router's WAN IP is
-      `100.64.x.x`-`100.127.x.x`, port forwarding cannot work and the plan is to
-      swap wg-easy for Tailscale.
-- [ ] WireGuard peers (wg-easy UI, QR codes)
+- [x] **Remote access solved with Tailscale.** The router never forwarded (proven by
+      packet capture) and is NOT behind CGNAT -- its WAN IP is the real
+      `66.168.9.180`, so forwarding *should* have worked; Spectrum's app simply would
+      not hold a stable rule. Tailscale installed on the host, subnet route
+      `192.168.1.0/24` approved, phone and laptop joined, verified with real traffic.
+- [ ] Optional: have Caddy also serve `homeserver.taildc08dd.ts.net` with a
+      Tailscale-issued cert, as a path independent of Cloudflare DNS and the subnet
+      route. Offered, not yet done.
+- [ ] Optional: remove wg-easy + ddns-updater (~55 MB) now that Tailscale replaces
+      them. Kept for now as a LAN fallback.
 - [x] Plex Watchlist -> auto-download wired: `PlexImport` import lists on both
       Radarr and Sonarr, quality profile 6 (HD 720p/1080p), `searchOnAdd` on,
       Sonarr `shouldMonitor=all`, `listSyncLevel=disabled` so un-watchlisting
@@ -225,6 +245,10 @@ Next:
 | The forwarded port was 49683, not 51820 | Spectrum's app picked its own external port. `WG_PORT` must equal the forwarded port because it is written into client configs as well as being the listen port. Peers must be re-downloaded after changing it |
 | Cockpit unreachable in the browser, `gnutls_handshake failed` in its log | Cockpit's self-signed cert had SAN `127.0.0.1`/`localhost` only, so `https://<lan-ip>:9090` matched nothing and browsers hard-failed it (`sscg` missing, so it fell back to bare OpenSSL). Fixed by proxying it through Caddy at `cockpit.<domain>` with `AllowUnencrypted`, `Origins` and `ProtocolHeader` in `/etc/cockpit/cockpit.conf`, plus a ufw rule for the docker bridge |
 | Caddy kept dialling the OLD LAN IP after the static-IP change | **`docker restart` does not re-read `env_file`.** `LAN_IP` was still `192.168.1.198` inside the container, so the Cockpit proxy 502'd. Use `up -d --force-recreate` after editing a stack's `.env` |
+| WireGuard: client says connected, nothing works remotely | Diagnose server-side, not in the app. `docker exec wg-easy wg show wg0 latest-handshakes` returning `0` and `transfer` returning `0 0` means **no packet ever arrived**. The app's toggle only reflects the local interface; WireGuard is connectionless so a green tunnel proves nothing |
+| ...and it appeared to work on Wi-Fi | Red herring twice over. `WG_ALLOWED_IPS` is split-tunnel, so at home the phone is already on `192.168.1.0/24` and reaches everything over the LAN without using the tunnel. Separately, the "cycling port" the owner saw in the app is the tunnel's local source port, which changes on every activation by design |
+| Proving whether packets arrive at all | `sudo tcpdump -ni enp0s31f6 "udp and not src net 192.168.1.0/24 and not port 53 and not port 123"`. **Exclude `140.228.0.0/16` too** -- PIA's tunnel generates ~300k packets in 3 minutes and buries everything. Also do not grep the capture for `.49683`: tcpdump timestamps like `22:36:50.496830` contain that string and produce false positives |
+| Cockpit `502` through Caddy after the static-IP change | `docker restart` does **not** re-read `env_file`, so `LAN_IP` was still the old `192.168.1.198`. Always `up -d --force-recreate` after editing a stack's `.env` |
 
 ## Conventions
 
