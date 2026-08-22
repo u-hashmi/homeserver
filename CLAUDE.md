@@ -261,6 +261,7 @@ Next:
 | ...and it appeared to work on Wi-Fi | Red herring twice over. `WG_ALLOWED_IPS` is split-tunnel, so at home the phone is already on `192.168.1.0/24` and reaches everything over the LAN without using the tunnel. Separately, the "cycling port" the owner saw in the app is the tunnel's local source port, which changes on every activation by design |
 | Proving whether packets arrive at all | `sudo tcpdump -ni enp0s31f6 "udp and not src net 192.168.1.0/24 and not port 53 and not port 123"`. **Exclude `140.228.0.0/16` too** -- PIA's tunnel generates ~300k packets in 3 minutes and buries everything. Also do not grep the capture for `.49683`: tcpdump timestamps like `22:36:50.496830` contain that string and produce false positives |
 | Cockpit `502` through Caddy after the static-IP change | `docker restart` does **not** re-read `env_file`, so `LAN_IP` was still the old `192.168.1.198`. Always `up -d --force-recreate` after editing a stack's `.env` |
+| qBittorrent appears to use ~4 GB of RAM | It does not. `docker stats` charges page cache to the cgroup, and **libtorrent 2.0 uses memory-mapped file I/O**, so mapped torrent files show as container memory. Measured: cgroup `anon` 6.5 MB, `file` 4870 MB, process RSS **16 MB**. It is fully reclaimable -- check `/proc/pressure/memory` and `available` in `free -h`, not `docker stats`. Capping it via qBittorrent's *Physical memory usage limit* only trades free cache for more disk reads |
 
 ## Conventions
 
